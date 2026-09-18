@@ -372,4 +372,34 @@ class CommandFlowTest {
                 .andExpect(jsonPath("$.ledgers[0].quantityAfter").value(2))
                 .andExpect(jsonPath("$.ledgers[0].orderNumber").value("ORD202607200024"));
     }
+
+    @Test
+    @DisplayName("예약한 주문이 자기 예약 때문에 재고 부족으로 뒤집히지 않는다")
+    void reservedOrderStaysReady() throws Exception {
+        // WH-CJ 의 CVR-WP-K 는 2개뿐이고 이 주문이 2개를 전부 쓴다
+        mvc.perform(get("/api/orders/{no}", "ORD202607210028"))
+                .andExpect(jsonPath("$.readiness.statusLabel").value("바로 준비 가능"));
+
+        mvc.perform(post("/api/orders/{no}/reservation", "ORD202607210028"))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/orders/{no}", "ORD202607210028"))
+                .andExpect(jsonPath("$.readiness.statusLabel").value("바로 준비 가능"))
+                .andExpect(jsonPath("$.readiness.demands[?(@.itemCode=='CVR-WP-K')].shortageQuantity")
+                        .value(0))
+                .andExpect(jsonPath("$.reservations.length()").value(2));
+    }
+
+    @Test
+    @DisplayName("예약된 주문의 수량이 뒤 주문 판정에서 두 번 빠지지 않는다")
+    void reservedQuantityIsNotCountedTwice() throws Exception {
+        // WH-08 PIL-ZERO 가용 8 → ORD202607200009 가 4를 예약하면 남은 4
+        mvc.perform(post("/api/orders/{no}/reservation", "ORD202607200009"))
+                .andExpect(status().isOk());
+
+        // 뒤 주문은 여전히 4를 보고 1 부족이어야 한다 (8 만큼 두 번 빠지면 더 모자라게 보인다)
+        mvc.perform(get("/api/orders/{no}", "ORD202607200012"))
+                .andExpect(jsonPath("$.readiness.demands[0].availableQuantity").value(4))
+                .andExpect(jsonPath("$.readiness.demands[0].shortageQuantity").value(1));
+    }
 }
