@@ -1,62 +1,101 @@
-// 발주 페이지 — 제공된 문서와 앱에서 만든 문서를 한 목록에서 본다. (요구사항 4-3)
+// 발주 화면 — 제공된 문서와 앱에서 만든 문서를 한 목록에서 관리한다. (요구사항 4-3)
 
-let schedules = [];
-let selected = null;
+let all = [];
+let picked = null;
+let current = null;
 
-async function load(keepSelection = true) {
-    const query = new URLSearchParams();
-    ['type', 'warehouseCode', 'confirmed', 'itemCode'].forEach((id) => {
-        const value = document.getElementById(id).value.trim();
-        if (value) query.set(id, value);
-    });
+const RULES = {
+    RECEIVABLE: (s) => s.confirmed && s.remainingQuantity > 0 && s.inspectStatus !== 'WAITING_INSPECTION',
+    INSPECT: (s) => s.inspectStatus === 'WAITING_INSPECTION' || s.inspectStatus === 'BEFORE_INSPECTION',
+    DRAFT: (s) => !s.confirmed
+};
 
-    schedules = await api.get('/api/stock-schedules' + (query.toString() ? '?' + query : ''));
-    fillOnce();
-    draw();
+async function load() {
+    all = await api.get('/api/stock-schedules');
+    fillFilters();
+    paint();
 
-    const wanted = (keepSelection && selected) || param('code')
-        || (schedules[0] && schedules[0].code);
-    if (wanted) select(wanted);
+    const wanted = param('code') || current;
+    if (wanted) open(wanted);
 }
 
 let filled = false;
-function fillOnce() {
+function fillFilters() {
     if (filled) return;
     filled = true;
-    [...new Set(schedules.map((s) => s.warehouseCode))].sort().forEach((w) =>
-        document.getElementById('warehouseCode')
-            .insertAdjacentHTML('beforeend', `<option value="${esc(w)}">${esc(w)}</option>`));
+    [...new Set(all.map((s) => s.warehouseCode))].sort().forEach((w) =>
+        document.getElementById('warehouse').insertAdjacentHTML('beforeend',
+            `<option value="${esc(w)}">${esc(w)}</option>`));
 }
 
-function draw() {
-    document.getElementById('scheduleCount').textContent = `${schedules.length}건`;
-    document.getElementById('scheduleList').innerHTML = table(
-        ['문서번호', '구분', '품목', '창고', {num: '계획'}, {num: '입고'}, {num: '남은'}, '사용가능', '진행상태', '확정'],
-        rows(schedules, (s) => `
-            <tr class="pick ${s.code === selected ? 'on' : ''} ${s.warehouseActive ? '' : 'dim'}"
-                data-code="${esc(s.code)}">
-                <td>${esc(s.code)}</td>
-                <td>${esc(s.typeLabel)}</td>
-                <td>${esc(s.itemCode)}</td>
+const val = (id) => document.getElementById(id).value;
+
+function visible() {
+    const code = val('itemCode').trim().toLowerCase();
+    return all
+        .filter((s) => !val('type') || s.type === val('type'))
+        .filter((s) => !val('warehouse') || s.warehouseCode === val('warehouse'))
+        .filter((s) => !code || s.itemCode.toLowerCase().includes(code))
+        .filter((s) => !picked || RULES[picked](s));
+}
+
+function paint() {
+    const count = (fn) => all.filter(fn).length;
+    const box = document.getElementById('stats');
+    box.innerHTML = stats([
+        {key: '', n: all.length, label: '전체 문서', hint: '구매발주 + 생산의뢰'},
+        {key: 'RECEIVABLE', tone: 'ok', n: count(RULES.RECEIVABLE),
+            label: '입고 가능', hint: '지금 입고 처리 가능'},
+        {key: 'INSPECT', tone: 'wait', n: count(RULES.INSPECT),
+            label: '검사 대기 · 전', hint: '통과해야 입고 가능'},
+        {key: 'DRAFT', tone: 'rev', n: count(RULES.DRAFT),
+            label: '미확정', hint: '준비 판단에서 제외'}
+    ], null, picked ?? '');
+    bindStats(box, (key) => { picked = (picked === key || key === '') ? null : key; paint(); });
+
+    const list = visible();
+    document.getElementById('count').textContent = `${list.length}건 / 전체 ${all.length}건`;
+    document.getElementById('list').innerHTML = grid(
+        ['문서번호', '구분', '품목', '입고창고', '공급처', {n: '계획'}, {n: '입고'}, {n: '남은'}, '사용가능', '진행상태'],
+        body(list, (s) => `
+            <tr class="row ${s.warehouseActive ? '' : 'muted'}"
+                data-code="${esc(s.code)}" aria-selected="${s.code === current}">
+                <td>
+                    <div class="cell-main">${esc(s.code)}</div>
+                    <div class="cell-sub">${s.confirmed ? '확정' : '미확정'}</div>
+                </td>
+                <td>${chip(s.typeLabel, s.type === 'PRODUCTION' ? 'wait' : '')}</td>
+                <td>
+                    <div class="cell-main">${esc(s.itemCode)}</div>
+                    <div class="cell-sub">${esc(s.itemName)}</div>
+                </td>
                 <td>${esc(s.warehouseCode)}</td>
+                <td class="cell-sub">${esc(s.supplierName)}</td>
                 <td class="num">${s.planQuantity}</td>
-                <td class="num">${s.receivedQuantity}</td>
-                <td class="num"><b>${s.remainingQuantity}</b></td>
-                <td>${day(s.availableAt)}</td>
-                <td>${dash(s.statusLabel)}</td>
-                <td>${s.confirmed
-                    ? '<span class="tag ok">확정</span>' : '<span class="tag">미확정</span>'}</td>
+                <td class="num">${s.receivedQuantity || '—'}</td>
+                <td class="num cell-main">${s.remainingQuantity}</td>
+                <td class="mono">${day(s.availableAt)}</td>
+                <td>
+                    <div>${dash(s.statusLabel)}</div>
+                    ${s.type === 'PRODUCTION'
+                        ? `<div class="cell-sub">검사 ${esc(s.inspectStatusLabel)}</div>` : ''}
+                </td>
             </tr>`, '조건에 맞는 문서가 없습니다.', 10));
 
-    document.querySelectorAll('#scheduleList tr.pick').forEach((tr) =>
-        tr.onclick = () => select(tr.dataset.code));
+    document.querySelectorAll('#list tr.row').forEach((tr) =>
+        tr.onclick = () => open(tr.dataset.code));
 }
 
-async function select(code) {
-    selected = code;
-    draw();
+async function open(code) {
+    current = code;
     history.replaceState(null, '', `/schedules?code=${encodeURIComponent(code)}`);
+    paint();
     render(await api.get('/api/stock-schedules/' + encodeURIComponent(code)));
+}
+
+function onDrawerClose() {
+    current = null;
+    history.replaceState(null, '', '/schedules');
 }
 
 function render(d) {
@@ -65,94 +104,92 @@ function render(d) {
     const inspected = s.inspectStatus === 'INSPECTED';
     const canReceive = s.confirmed && s.remainingQuantity > 0 && (!production || inspected);
 
-    let blockReason = '';
-    if (s.remainingQuantity === 0) blockReason = '남은 수량이 없어 더 입고할 수 없습니다.';
-    else if (!s.confirmed) blockReason = '확정되지 않은 문서는 입고할 수 없습니다.';
-    else if (production && !inspected) blockReason = '생산의뢰는 품질검사를 통과해야 입고할 수 있습니다.';
+    let blocked = '';
+    if (s.remainingQuantity === 0) blocked = '남은 수량이 없어 더 입고할 수 없습니다.';
+    else if (!s.confirmed) blocked = '확정되지 않은 문서는 입고할 수 없습니다. 먼저 발주 확정을 누르세요.';
+    else if (production && !inspected) blocked = '생산의뢰는 품질검사를 통과해야 입고할 수 있습니다.';
 
-    document.getElementById('detail').innerHTML = `
-        <h2>${esc(s.code)}</h2>
-        <div class="body">
-            <dl class="kv">
-                <dt>문서구분</dt><dd>${esc(s.typeLabel)}</dd>
-                <dt>품목</dt><dd>${linkItem(s.itemCode)} · ${esc(s.itemName)}</dd>
-                <dt>입고창고</dt><dd>${esc(s.warehouseCode)} · ${esc(s.warehouseName)}
-                    ${s.warehouseActive ? '' : '<span class="tag">사용 중지</span>'}</dd>
-                <dt>공급처</dt><dd>${esc(s.supplierName)} (${esc(s.supplierCode)}) · 리드타임 ${s.leadTimeDays}일</dd>
-                <dt>수량</dt><dd>계획 ${s.planQuantity} · 입고 ${s.receivedQuantity} · <b>남은 ${s.remainingQuantity}</b></dd>
-                <dt>사용가능예정일</dt><dd>${dash(s.availableAt && s.availableAt.slice(0, 10))}</dd>
-                <dt>진행상태</dt><dd>${dash(s.statusLabel)}</dd>
-                <dt>검사상태</dt><dd>${esc(s.inspectStatusLabel)}</dd>
-                <dt>확정여부</dt><dd>${s.confirmed ? '확정' : '미확정'}</dd>
-                <dt>만든 주문</dt><dd>${d.sourceOrderNumber
-                    ? linkOrder(d.sourceOrderNumber)
-                    : '<span style="font-weight:400;color:var(--muted)">기준시각에 이미 있던 문서</span>'}</dd>
-                <dt>판정 반영</dt><dd>${s.usableForPlanning
-                    ? '<span class="tag ok">준비 판단에 사용</span>'
-                    : '<span class="tag">준비 판단에서 제외</span>'}</dd>
-            </dl>
+    drawer.open(
+        esc(s.code),
+        `${esc(s.typeLabel)} · ${esc(s.itemCode)} · ${esc(s.warehouseCode)} 입고`,
+        `
+        <div class="block">
+            <div class="acts" style="padding-bottom:0">
+                <dl class="kv" style="width:100%">
+                    <dt>품목</dt><dd>${toItem(s.itemCode)} ${esc(s.itemName)}</dd>
+                    <dt>입고창고</dt><dd>${esc(s.warehouseCode)} · ${esc(s.warehouseName)}
+                        ${s.warehouseActive ? '' : chip('사용 중지', 'bad')}</dd>
+                    <dt>공급처</dt><dd>${esc(s.supplierName)} (${esc(s.supplierCode)})
+                        · 리드타임 ${s.leadTimeDays}일</dd>
+                    <dt>수량</dt><dd>계획 ${s.planQuantity} · 입고 ${s.receivedQuantity}
+                        · 남은 <span class="${s.remainingQuantity ? '' : 'short'}">${s.remainingQuantity}</span></dd>
+                    <dt>사용가능예정일</dt><dd>${date(s.availableAt)}</dd>
+                    <dt>진행상태</dt><dd>${dash(s.statusLabel)}</dd>
+                    <dt>검사상태</dt><dd>${esc(s.inspectStatusLabel)}</dd>
+                    <dt>만든 주문</dt><dd>${d.sourceOrderNumber
+                        ? toOrder(d.sourceOrderNumber)
+                        : '<span class="hint">기준시각에 이미 있던 문서</span>'}</dd>
+                    <dt>준비 판단</dt><dd>${s.usableForPlanning ? chip('반영', 'ok') : chip('제외')}</dd>
+                </dl>
+            </div>
         </div>
 
-        <section class="block">
+        <div class="block">
             <h3>처리</h3>
-            ${blockReason ? `<div class="notice">${esc(blockReason)}</div>` : ''}
-            <div class="actions">
-                <button id="confirm" ${s.confirmed ? 'disabled' : ''}>발주 확정</button>
+            ${blocked ? `<div class="acts" style="padding-bottom:0">
+                <div class="note warn" style="width:100%">${esc(blocked)}</div></div>` : ''}
+            <div class="acts">
+                <button class="btn" id="confirm" ${s.confirmed ? 'disabled' : ''}>발주 확정</button>
                 ${production ? `
-                    <button id="pass" ${inspected ? 'disabled' : ''}>검사 통과</button>
-                    <button id="fail" ${!s.confirmed ? 'disabled' : ''}>검사 불합격</button>` : ''}
+                    <button class="btn" id="pass" ${inspected ? 'disabled' : ''}>검사 통과</button>
+                    <button class="btn danger" id="fail" ${!s.confirmed ? 'disabled' : ''}>검사 불합격</button>`
+                    : '<span class="hint">구매발주는 품질검사 대상이 아닙니다.</span>'}
             </div>
-            <div class="actions">
+            <div class="acts" style="border-top:1px solid var(--line-soft)">
                 <input id="qty" type="number" min="1" max="${s.remainingQuantity || 1}"
-                       value="${s.remainingQuantity || 1}" ${canReceive ? '' : 'disabled'}>
-                <button class="primary" id="receive" ${canReceive ? '' : 'disabled'}>입고 처리</button>
-                <span class="step">입고해야 현재고가 늘어납니다. 계획수량을 넘는 입고는 거부됩니다.</span>
+                       value="${s.remainingQuantity || 1}" ${canReceive ? '' : 'disabled'} style="width:80px">
+                <button class="btn main" id="receive" ${canReceive ? '' : 'disabled'}>입고 처리</button>
+                <span class="hint">입고해야 현재고가 늘어납니다. 계획수량을 넘는 입고는 거부됩니다.</span>
             </div>
-        </section>
+        </div>
 
-        <section class="block">
-            <h3>입고 이력 — 현재고가 어떻게 바뀌었는지</h3>
-            ${ledgerTable(d.ledgers)}
-        </section>`;
+        ${ledgerBlock(d.ledgers)}`);
 
     bind(s);
 }
 
 function bind(s) {
     const code = encodeURIComponent(s.code);
-    // run() 이 성공 토스트를 띄우므로 여기서는 목록만 다시 읽는다
-    const reload = async (result) => { if (result) await load(); };
+    const refresh = async (result) => { if (result) { await load(); } };
 
-    const confirmButton = document.getElementById('confirm');
-    if (confirmButton && !confirmButton.disabled) {
-        confirmButton.onclick = async () => reload(await run(confirmButton,
-            () => api.post(`/api/stock-schedules/${code}/confirmation`), '확정했습니다.'));
-    }
+    const wire = (id, work, message) => {
+        const button = document.getElementById(id);
+        if (!button || button.disabled) return;
+        button.onclick = async () => refresh(await act(button, work, message));
+    };
 
-    [['pass', true, '검사 통과로 기록했습니다.'], ['fail', false, '검사 불합격으로 기록했습니다.']]
-        .forEach(([id, passed, message]) => {
-            const button = document.getElementById(id);
-            if (!button || button.disabled) return;
-            button.onclick = async () => reload(await run(button,
-                () => api.post(`/api/stock-schedules/${code}/inspection`, {passed}), message));
-        });
+    wire('confirm', () => api.post(`/api/stock-schedules/${code}/confirmation`), '발주를 확정했습니다.');
+    wire('pass', () => api.post(`/api/stock-schedules/${code}/inspection`, {passed: true}),
+        '검사 통과로 기록했습니다.');
+    wire('fail', () => api.post(`/api/stock-schedules/${code}/inspection`, {passed: false}),
+        '검사 불합격으로 기록했습니다.');
 
-    const receiveButton = document.getElementById('receive');
-    if (receiveButton && !receiveButton.disabled) {
-        receiveButton.onclick = async () => {
+    const receive = document.getElementById('receive');
+    if (receive && !receive.disabled) {
+        receive.onclick = async () => {
             const quantity = Number(document.getElementById('qty').value);
             if (!quantity) return;
             // 같은 입고를 두 번 눌러도 한 번만 반영되도록 요청마다 키를 만든다
             const key = `${s.code}:${s.receivedQuantity}:${quantity}`;
-            await reload(await run(receiveButton,
+            refresh(await act(receive,
                 () => api.post(`/api/stock-schedules/${code}/receipt`, {quantity}, {'Idempotency-Key': key}),
                 '입고했습니다. 현재고가 늘었습니다.'));
         };
     }
 }
 
-['type', 'warehouseCode', 'confirmed'].forEach((id) =>
-    document.getElementById(id).addEventListener('change', () => { selected = null; load(false); }));
-document.getElementById('itemCode').addEventListener('input', () => { selected = null; load(false); });
-
-load(false).catch((e) => flash(e.message, true));
+mountDrawer();
+['type', 'warehouse'].forEach((id) =>
+    document.getElementById(id).addEventListener('change', paint));
+document.getElementById('itemCode').addEventListener('input', paint);
+load().catch((e) => toast(e.message, true));

@@ -7,41 +7,36 @@
     <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
-<header>
-    <h1>재고 흐름 ERP</h1>
-    <nav>
+<header class="top">
+    <div class="brand">재고 흐름 <span>ERP</span></div>
+    <nav class="tabs">
         <a href="/items">제품</a>
         <a href="/orders">주문</a>
-        <a href="/schedules" class="on">발주</a>
+        <a href="/schedules" aria-current="page">발주</a>
     </nav>
-    <span class="clock">기준시각 2026-07-21 09:00</span>
+    <div class="asof">기준시각 <b>2026-07-21 09:00</b></div>
 </header>
 
-<main>
-    <div class="panel">
-        <h2>구매발주 · 생산의뢰<span class="count" id="scheduleCount"></span></h2>
-        <div class="filters">
+<div class="wrap">
+    <div class="page-head">
+        <h1>발주 · 생산의뢰</h1>
+        <p>기준시각에 이미 있던 문서와 앱에서 만든 문서를 한 목록에서 관리합니다. 입고해야 현재고가 늘어납니다.</p>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="card">
+        <div class="toolbar">
             <select id="type">
                 <option value="">구분 전체</option>
-                <option value="PURCHASE">구매</option>
-                <option value="PRODUCTION">생산</option>
+                <option value="PURCHASE">구매발주</option>
+                <option value="PRODUCTION">생산의뢰</option>
             </select>
-            <select id="warehouseCode"><option value="">창고 전체</option></select>
-            <select id="confirmed">
-                <option value="">확정여부 전체</option>
-                <option value="true">확정</option>
-                <option value="false">미확정</option>
-            </select>
+            <select id="warehouse"><option value="">창고 전체</option></select>
             <input id="itemCode" type="search" placeholder="품목코드">
+            <span class="grow" id="count"></span>
         </div>
-        <div class="scroll" id="scheduleList"></div>
+        <div class="scroller" id="list"></div>
     </div>
-
-    <div class="panel" id="detail">
-        <h2>문서 상세</h2>
-        <p class="empty">왼쪽에서 문서를 선택하세요.</p>
-    </div>
-</main>
+</div>
 
 <script src="/js/app.js"></script>
 <script src="/js/schedules.js"></script>
