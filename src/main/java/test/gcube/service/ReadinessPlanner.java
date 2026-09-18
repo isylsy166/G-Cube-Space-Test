@@ -1,0 +1,313 @@
+package test.gcube.service;
+
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import test.gcube.dto.DemandAllocationResponse;
+import test.gcube.dto.OrderReadinessResponse;
+import test.gcube.entity.ItemSetComponent;
+import test.gcube.entity.OrderDetail;
+import test.gcube.entity.Orders;
+import test.gcube.entity.Stock;
+import test.gcube.entity.StockSchedule;
+import test.gcube.entity.enums.InspectStatus;
+import test.gcube.entity.enums.ReadinessStatus;
+import test.gcube.entity.enums.ScheduleType;
+import test.gcube.repository.OrderDetailRepository;
+import test.gcube.repository.OrdersRepository;
+import test.gcube.repository.StockRepository;
+import test.gcube.repository.StockScheduleRepository;
+
+/**
+ * 배송일이 빠른 주문부터 재고와 입고예정을 나눠 주며 주문별 준비 가능 여부를 판정한다.
+ * (요구사항 3-2, 3-3, 3-6)
+ *
+ * <p>핵심은 <b>전역 배분</b>이다. 주문을 하나씩 따로 보면 같은 재고를 여러 주문이 중복으로
+ * 세어 전부 "준비 가능"으로 보이므로, 우선순위대로 훑으면서 앞선 주문이 가져간 수량을
+ * 풀에서 빼고 다음 주문을 판정한다.
+ *
+ * <p>판정만 하고 아무것도 저장하지 않는다. 실제 예약은 {@code ReservationService} 가 한다.
+ */
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class ReadinessPlanner {
+
+    private final OrdersRepository ordersRepository;
+    private final OrderDetailRepository orderDetailRepository;
+    private final StockRepository stockRepository;
+    private final StockScheduleRepository stockScheduleRepository;
+    private final SetExpander setExpander;
+
+    /** 준비 대상 주문 전체를 우선순위대로 판정한다. 키는 주문번호다. */
+    public Map<String, OrderReadinessResponse> planAll() {
+        List<Orders> orders = ordersRepository.findPreparationTargets();
+
+        Map<Long, List<OrderDetail>> detailsByOrder = orders.isEmpty()
+                ? Map.of()
+                : orderDetailRepository.findByOrderIdInWithRefs(
+                                orders.stream().map(Orders::getId).toList()).stream()
+                        .collect(Collectors.groupingBy(d -> d.getOrder().getId()));
+
+        Map<Long, List<ItemSetComponent>> componentsBySet = setExpander.loadComponents(
+                detailsByOrder.values().stream().flatMap(List::stream).toList());
+
+        StockPool stockPool = StockPool.of(stockRepository.findAllWithRefs());
+        SchedulePool schedulePool = SchedulePool.of(stockScheduleRepository.findAllWithRefs());
+
+        Map<String, OrderReadinessResponse> result = new LinkedHashMap<>();
+        for (Orders order : orders) {
+            List<OrderDetail> details = detailsByOrder.getOrDefault(order.getId(), List.of());
+            result.put(order.getOrderNumber(),
+                    plan(order, details, componentsBySet, stockPool, schedulePool));
+        }
+        return result;
+    }
+
+    /**
+     * 한 주문의 판정 결과. 전역 배분 결과 안에서의 값이어야 의미가 있으므로
+     * 전체를 판정한 뒤 해당 주문만 꺼낸다.
+     */
+    public OrderReadinessResponse plan(String orderNumber) {
+        OrderReadinessResponse readiness = planAll().get(orderNumber);
+        if (readiness != null) {
+            return readiness;
+        }
+        // 준비 대상이 아닌 주문(취소·출고완료·배송완료)
+        Orders order = ordersRepository.findByOrderNumberWithWarehouse(orderNumber).orElseThrow();
+        return new OrderReadinessResponse(
+                order.getOrderNumber(),
+                order.getWarehouse().getCode(),
+                order.getDeliveryAt(),
+                ReadinessStatus.REVIEW_REQUIRED.name(),
+                ReadinessStatus.REVIEW_REQUIRED.getLabel(),
+                List.of(),
+                List.of("주문 상태가 '%s' 라서 새 출고 준비 대상이 아닙니다."
+                        .formatted(order.getOrderStatus().getLabel())));
+    }
+
+    private OrderReadinessResponse plan(Orders order, List<OrderDetail> details,
+                                        Map<Long, List<ItemSetComponent>> componentsBySet,
+                                        StockPool stockPool, SchedulePool schedulePool) {
+        List<String> reviewReasons = reviewReasons(order, details);
+        if (!reviewReasons.isEmpty()) {
+            // 확인이 필요한 주문은 재고를 건드리지 않는다. 풀도 소비하지 않는다. (요구사항 3-6)
+            return response(order, ReadinessStatus.REVIEW_REQUIRED, List.of(), reviewReasons);
+        }
+
+        Long warehouseId = order.getWarehouse().getId();
+        LocalDate usableBy = order.getDeliveryAt().toLocalDate().minusDays(1);
+
+        List<Allocation> allocations = new ArrayList<>();
+        for (ItemDemand demand : setExpander.expand(details, componentsBySet)) {
+            Long itemId = demand.item().getId();
+            int required = demand.quantity();
+
+            int available = stockPool.available(warehouseId, itemId);
+            int fromStock = Math.min(available, required);
+
+            int remaining = required - fromStock;
+            List<SchedulePortion> usedSchedules = new ArrayList<>();
+            int fromSchedule = 0;
+            for (SchedulePortion portion : schedulePool.portions(warehouseId, itemId, usableBy)) {
+                if (remaining == 0) {
+                    break;
+                }
+                int take = Math.min(portion.remaining, remaining);
+                if (take > 0) {
+                    usedSchedules.add(new SchedulePortion(portion.schedule, take));
+                    fromSchedule += take;
+                    remaining -= take;
+                }
+            }
+
+            allocations.add(new Allocation(
+                    demand, available, fromStock, fromSchedule, remaining, usedSchedules));
+        }
+
+        boolean shortage = allocations.stream().anyMatch(a -> a.shortage > 0);
+        if (shortage) {
+            // 일부 품목만 가능해도 그 주문을 위해 미리 잡아두지 않는다. (요구사항 3-3)
+            return response(order, ReadinessStatus.SHORTAGE, allocations, List.of());
+        }
+
+        // 준비 가능한 주문만 풀에서 실제로 차감한다. 뒤 주문이 같은 수량을 다시 쓰지 못한다.
+        for (Allocation allocation : allocations) {
+            stockPool.consume(warehouseId, allocation.demand.item().getId(), allocation.fromStock);
+            allocation.usedSchedules.forEach(p -> schedulePool.consume(p.schedule, p.remaining));
+        }
+
+        return response(order, readinessOf(allocations), allocations, List.of());
+    }
+
+    /** 현재고만으로 되면 바로 준비 가능, 아니면 기다리는 원인 중 가장 앞선 단계를 보여 준다. */
+    private ReadinessStatus readinessOf(List<Allocation> allocations) {
+        ReadinessStatus worst = ReadinessStatus.READY;
+        for (Allocation allocation : allocations) {
+            for (SchedulePortion portion : allocation.usedSchedules) {
+                ReadinessStatus cause = causeOf(portion.schedule);
+                if (severity(cause) > severity(worst)) {
+                    worst = cause;
+                }
+            }
+        }
+        return worst;
+    }
+
+    private ReadinessStatus causeOf(StockSchedule schedule) {
+        if (schedule.getType() == ScheduleType.PRODUCTION) {
+            return schedule.getInspectStatus() == InspectStatus.WAITING_INSPECTION
+                    ? ReadinessStatus.WAIT_INSPECTION
+                    : ReadinessStatus.WAIT_PRODUCTION;
+        }
+        return ReadinessStatus.WAIT_PURCHASE;
+    }
+
+    private int severity(ReadinessStatus status) {
+        return switch (status) {
+            case READY -> 0;
+            case WAIT_PURCHASE -> 1;
+            case WAIT_PRODUCTION -> 2;
+            case WAIT_INSPECTION -> 3;
+            default -> 4;
+        };
+    }
+
+    /** 자동 처리하면 안 되는 주문의 사유. (요구사항 3-6) */
+    private List<String> reviewReasons(Orders order, List<OrderDetail> details) {
+        List<String> reasons = new ArrayList<>();
+
+        if (!order.getWarehouse().isStatus()) {
+            reasons.add("출고창고 %s 가 사용 중지 상태입니다. 창고 확인이 필요합니다."
+                    .formatted(order.getWarehouse().getCode()));
+        }
+        if (order.getDeliveryAt() == null) {
+            reasons.add("배송예정일이 없습니다. 일정 확인이 필요합니다.");
+        }
+        if (details.isEmpty()) {
+            reasons.add("주문 상세가 없습니다. 등록되지 않은 품목이 섞여 있었는지 확인이 필요합니다.");
+        }
+        details.stream()
+                .filter(OrderDetail::isPreparable)
+                .filter(d -> d.getOrderQuantity() <= 0)
+                .forEach(d -> reasons.add("%d번 품목의 주문 수량이 %d 입니다. 수량 확인이 필요합니다."
+                        .formatted(d.getSequence(), d.getOrderQuantity())));
+
+        return reasons;
+    }
+
+    private OrderReadinessResponse response(Orders order, ReadinessStatus status,
+                                            List<Allocation> allocations, List<String> reasons) {
+        return new OrderReadinessResponse(
+                order.getOrderNumber(),
+                order.getWarehouse().getCode(),
+                order.getDeliveryAt(),
+                status.name(),
+                status.getLabel(),
+                allocations.stream().map(Allocation::toResponse).toList(),
+                reasons);
+    }
+
+    // ---------- 판정 중에만 쓰는 작업용 구조 ----------
+
+    private record Allocation(ItemDemand demand, int available, int fromStock, int fromSchedule,
+                              int shortage, List<SchedulePortion> usedSchedules) {
+
+        DemandAllocationResponse toResponse() {
+            return new DemandAllocationResponse(
+                    demand.item().getCode(),
+                    demand.item().getName(),
+                    demand.item().getType().name(),
+                    demand.item().getType().getLabel(),
+                    demand.item().isSerial(),
+                    demand.quantity(),
+                    available,
+                    fromStock,
+                    fromSchedule,
+                    shortage,
+                    usedSchedules.stream().map(p -> p.schedule.getCode()).toList());
+        }
+    }
+
+    private record SchedulePortion(StockSchedule schedule, int remaining) {
+    }
+
+    /** 창고·품목별 가용재고 풀. 사용 중지된 창고는 애초에 담지 않는다. (요구사항 3-2) */
+    private static final class StockPool {
+        private final Map<String, Integer> available = new LinkedHashMap<>();
+
+        static StockPool of(List<Stock> stocks) {
+            StockPool pool = new StockPool();
+            for (Stock stock : stocks) {
+                if (!stock.getWarehouse().isStatus()) {
+                    continue;
+                }
+                pool.available.put(
+                        key(stock.getWarehouse().getId(), stock.getItem().getId()),
+                        stock.getAvailableQuantity());
+            }
+            return pool;
+        }
+
+        int available(Long warehouseId, Long itemId) {
+            return available.getOrDefault(key(warehouseId, itemId), 0);
+        }
+
+        void consume(Long warehouseId, Long itemId, int amount) {
+            available.merge(key(warehouseId, itemId), -amount, Integer::sum);
+        }
+
+        private static String key(Long warehouseId, Long itemId) {
+            return warehouseId + ":" + itemId;
+        }
+    }
+
+    /**
+     * 창고·품목별 입고예정 풀. 확정되지 않았거나, 사용 중지된 창고로 들어오거나,
+     * 남은 수량이 없는 문서는 담지 않는다. (요구사항 3-2)
+     */
+    private static final class SchedulePool {
+        private final Map<String, List<StockSchedule>> schedules = new LinkedHashMap<>();
+        private final Map<Long, Integer> remaining = new LinkedHashMap<>();
+
+        static SchedulePool of(List<StockSchedule> all) {
+            SchedulePool pool = new SchedulePool();
+            for (StockSchedule schedule : all) {
+                if (!schedule.isConfirmed()
+                        || !schedule.getWarehouse().isStatus()
+                        || schedule.getRemainingQuantity() <= 0
+                        || schedule.getAvailableAt() == null) {
+                    continue;
+                }
+                pool.schedules.computeIfAbsent(
+                                StockPool.key(schedule.getWarehouse().getId(),
+                                        schedule.getItem().getId()),
+                                k -> new ArrayList<>())
+                        .add(schedule);
+                pool.remaining.put(schedule.getId(), schedule.getRemainingQuantity());
+            }
+            pool.schedules.values().forEach(list -> list.sort(
+                    (a, b) -> a.getAvailableAt().compareTo(b.getAvailableAt())));
+            return pool;
+        }
+
+        /** 배송일 전날까지 쓸 수 있다고 확정된 문서만 준다. (요구사항 3-2) */
+        List<SchedulePortion> portions(Long warehouseId, Long itemId, LocalDate usableBy) {
+            return schedules.getOrDefault(StockPool.key(warehouseId, itemId), List.of()).stream()
+                    .filter(s -> !s.getAvailableAt().toLocalDate().isAfter(usableBy))
+                    .map(s -> new SchedulePortion(s, remaining.getOrDefault(s.getId(), 0)))
+                    .filter(p -> p.remaining > 0)
+                    .toList();
+        }
+
+        void consume(StockSchedule schedule, int amount) {
+            remaining.merge(schedule.getId(), -amount, Integer::sum);
+        }
+    }
+}
