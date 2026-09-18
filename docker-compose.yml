@@ -1,0 +1,38 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: gcube-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: gcube
+      MYSQL_USER: gcube
+      MYSQL_PASSWORD: gcube
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+09:00
+      # 격리수준: 예약·출고 시 SELECT ... FOR UPDATE 로 직렬화하므로 기본값
+      # REPEATABLE READ 로 충분하지만, 판정 조회가 같은 트랜잭션에서 반복될 때
+      # 스냅샷이 고정되는 편이 숫자 정합성 확인에 유리하다. 명시적으로 고정한다.
+      - --transaction-isolation=REPEATABLE-READ
+      # 로컬 개발 편의: 느린 쿼리와 전체 스캔을 바로 확인
+      - --slow-query-log=1
+      - --long-query-time=1
+      - --log-queries-not-using-indexes=1
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # mysqladmin ping 은 서버가 접속을 받기 전에도 성공할 수 있어, 실제 쿼리로 확인한다.
+      test: ["CMD", "mysql", "-h", "127.0.0.1", "-u", "gcube", "-pgcube", "-e", "SELECT 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  mysql-data:
+    name: gcube-mysql-data
