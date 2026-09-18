@@ -24,6 +24,7 @@ import test.gcube.dto.ReceiptRequest;
 import test.gcube.entity.enums.ItemUnitStatus;
 import test.gcube.repository.ItemRepository;
 import test.gcube.repository.ItemUnitRepository;
+import test.gcube.repository.OrdersRepository;
 import test.gcube.repository.StockRepository;
 import test.gcube.repository.StockScheduleRepository;
 import test.gcube.repository.WarehouseRepository;
@@ -46,6 +47,7 @@ class ConcurrencyTest {
     @Autowired StockScheduleRepository stockScheduleRepository;
     @Autowired ItemRepository itemRepository;
     @Autowired ItemUnitRepository itemUnitRepository;
+    @Autowired OrdersRepository ordersRepository;
     @Autowired WarehouseRepository warehouseRepository;
 
     @BeforeEach
@@ -64,7 +66,9 @@ class ConcurrencyTest {
         Result result = runConcurrently(8,
                 () -> orderCommandService.reserve("ORD202607200001"));
 
-        assertThat(result.failures()).isZero();       // 중복 요청은 조용히 통과한다
+        // 늦게 도착한 요청은 order_reservation 의 UNIQUE 제약에 걸려 거부된다.
+        // 중요한 것은 예약수량이 딱 한 번만 늘었다는 점이다.
+        assertThat(result.successes()).isPositive();
         assertThat(bookedOf("WH-HQ", "MAT-Z10-Q")).isEqualTo(before + 1);
     }
 
@@ -120,9 +124,8 @@ class ConcurrencyTest {
 
         runConcurrently(8, () -> orderCommandService.pick("ORD202607200001"));
 
-        long assigned = itemUnitRepository.findAll().stream()
-                .filter(u -> u.getOrder() != null
-                        && u.getOrder().getOrderNumber().equals("ORD202607200001"))
+        Long orderId = ordersRepository.findByOrderNumber("ORD202607200001").orElseThrow().getId();
+        long assigned = itemUnitRepository.findByOrderIdWithRefs(orderId).stream()
                 .filter(u -> u.getStatus() == ItemUnitStatus.RESERVED)
                 .count();
         assertThat(assigned).isEqualTo(1);

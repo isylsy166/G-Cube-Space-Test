@@ -347,4 +347,29 @@ class CommandFlowTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusLabel").value("입고 완료"));
     }
+
+    @Test
+    @DisplayName("발주 상세에서 어떤 주문 때문에 생겼는지와 입고 이력을 볼 수 있다")
+    void scheduleDetailShowsSourceOrderAndLedger() throws Exception {
+        String body = mvc.perform(post("/api/orders/{no}/purchase-orders", "ORD202607200024")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(
+                                new ScheduleCreateRequest("FRM-LOW-Q", null, null))))
+                .andReturn().getResponse().getContentAsString();
+        String code = json.readTree(body).get("code").asText();
+
+        mvc.perform(post("/api/stock-schedules/{code}/receipt", code)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new ReceiptRequest(2))))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/stock-schedules/{code}", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sourceOrderNumber").value("ORD202607200024"))
+                .andExpect(jsonPath("$.ledgers.length()").value(1))
+                .andExpect(jsonPath("$.ledgers[0].typeLabel").value("입고"))
+                .andExpect(jsonPath("$.ledgers[0].quantityDelta").value(2))
+                .andExpect(jsonPath("$.ledgers[0].quantityAfter").value(2))
+                .andExpect(jsonPath("$.ledgers[0].orderNumber").value("ORD202607200024"));
+    }
 }

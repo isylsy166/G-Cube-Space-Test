@@ -192,10 +192,13 @@ class QueryApiTest {
     void productionScheduleShowsInspectStatus() throws Exception {
         mvc.perform(get("/api/stock-schedules/{code}", "MO-20260721-Z10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.typeLabel").value("생산"))
-                .andExpect(jsonPath("$.inspectStatus").value("WAITING_INSPECTION"))
-                .andExpect(jsonPath("$.inspectStatusLabel").value("검사 대기"))
-                .andExpect(jsonPath("$.supplierCode").value("FAC-01"))
-                .andExpect(jsonPath("$.leadTimeDays").value(3));
+                .andExpect(jsonPath("$.schedule.typeLabel").value("생산"))
+                .andExpect(jsonPath("$.schedule.inspectStatus").value("WAITING_INSPECTION"))
+                .andExpect(jsonPath("$.schedule.inspectStatusLabel").value("검사 대기"))
+                .andExpect(jsonPath("$.schedule.supplierCode").value("FAC-01"))
+                .andExpect(jsonPath("$.schedule.leadTimeDays").value(3))
+                // 제공된 기존 문서는 만들어 준 주문이 없다
+                .andExpect(jsonPath("$.sourceOrderNumber").doesNotExist())
+                .andExpect(jsonPath("$.ledgers.length()").value(0));
     }
 }
