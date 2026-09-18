@@ -2,9 +2,11 @@ package test.gcube.service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ import test.gcube.entity.enums.InspectStatus;
 import test.gcube.entity.enums.ReadinessStatus;
 import test.gcube.entity.enums.ScheduleType;
 import test.gcube.repository.OrderDetailRepository;
+import test.gcube.repository.OrderReservationRepository;
 import test.gcube.repository.OrdersRepository;
 import test.gcube.repository.StockRepository;
 import test.gcube.repository.StockScheduleRepository;
@@ -41,6 +44,7 @@ public class ReadinessPlanner {
 
     private final OrdersRepository ordersRepository;
     private final OrderDetailRepository orderDetailRepository;
+    private final OrderReservationRepository orderReservationRepository;
     private final StockRepository stockRepository;
     private final StockScheduleRepository stockScheduleRepository;
     private final SetExpander setExpander;
@@ -60,12 +64,13 @@ public class ReadinessPlanner {
 
         StockPool stockPool = StockPool.of(stockRepository.findAllWithRefs());
         SchedulePool schedulePool = SchedulePool.of(stockScheduleRepository.findAllWithRefs());
+        Set<Long> reserved = new HashSet<>(orderReservationRepository.findReservedOrderIds());
 
         Map<String, OrderReadinessResponse> result = new LinkedHashMap<>();
         for (Orders order : orders) {
             List<OrderDetail> details = detailsByOrder.getOrDefault(order.getId(), List.of());
             result.put(order.getOrderNumber(),
-                    plan(order, details, componentsBySet, stockPool, schedulePool));
+                    plan(order, details, componentsBySet, stockPool, schedulePool, reserved));
         }
         return result;
     }
@@ -94,11 +99,22 @@ public class ReadinessPlanner {
 
     private OrderReadinessResponse plan(Orders order, List<OrderDetail> details,
                                         Map<Long, List<ItemSetComponent>> componentsBySet,
-                                        StockPool stockPool, SchedulePool schedulePool) {
+                                        StockPool stockPool, SchedulePool schedulePool,
+                                        Set<Long> reservedOrderIds) {
         List<String> reviewReasons = reviewReasons(order, details);
         if (!reviewReasons.isEmpty()) {
             // 확인이 필요한 주문은 재고를 건드리지 않는다. 풀도 소비하지 않는다. (요구사항 3-6)
             return response(order, ReadinessStatus.REVIEW_REQUIRED, List.of(), reviewReasons);
+        }
+
+        if (reservedOrderIds.contains(order.getId())) {
+            // 이미 예약이 잡힌 주문. 필요 수량은 stock.booked_quantity 에 이미 빠져 있으므로
+            // 풀에서 또 빼면 안 된다. 다시 빼면 자기 예약 때문에 자기가 재고 부족으로 보이고,
+            // 뒤 주문들은 실제보다 재고가 적다고 판단하게 된다.
+            List<Allocation> held = setExpander.expand(details, componentsBySet).stream()
+                    .map(d -> new Allocation(d, d.quantity(), d.quantity(), 0, 0, List.of()))
+                    .toList();
+            return response(order, ReadinessStatus.READY, held, List.of());
         }
 
         Long warehouseId = order.getWarehouse().getId();

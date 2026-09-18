@@ -27,4 +27,11 @@ public interface OrderReservationRepository extends JpaRepository<OrderReservati
     List<OrderReservation> findByOrderIdForUpdate(@Param("orderId") Long orderId);
 
     Optional<OrderReservation> findByOrderIdAndItemId(Long orderId, Long itemId);
+
+    /** 이미 예약이 잡혀 있는 주문. 이 주문들의 수량은 stock.booked_quantity 에 들어가 있다. */
+    @Query("""
+            select distinct r.order.id from OrderReservation r
+            where r.status = test.gcube.entity.enums.ReservationStatus.RESERVED
+            """)
+    List<Long> findReservedOrderIds();
 }
