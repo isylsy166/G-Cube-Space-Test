@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>발주 — 재고 흐름 ERP</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header>
+    <h1>재고 흐름 ERP</h1>
+    <nav>
+        <a href="/items">제품</a>
+        <a href="/orders">주문</a>
+        <a href="/schedules" class="on">발주</a>
+    </nav>
+    <span class="clock">기준시각 2026-07-21 09:00</span>
+</header>
+
+<main>
+    <div class="panel">
+        <h2>구매발주 · 생산의뢰<span class="count" id="scheduleCount"></span></h2>
+        <div class="filters">
+            <select id="type">
+                <option value="">구분 전체</option>
+                <option value="PURCHASE">구매</option>
+                <option value="PRODUCTION">생산</option>
+            </select>
+            <select id="warehouseCode"><option value="">창고 전체</option></select>
+            <select id="confirmed">
+                <option value="">확정여부 전체</option>
+                <option value="true">확정</option>
+                <option value="false">미확정</option>
+            </select>
+            <input id="itemCode" type="search" placeholder="품목코드">
+        </div>
+        <div class="scroll" id="scheduleList"></div>
+    </div>
+
+    <div class="panel" id="detail">
+        <h2>문서 상세</h2>
+        <p class="empty">왼쪽에서 문서를 선택하세요.</p>
+    </div>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/schedules.js"></script>
+</body>
+</html>
