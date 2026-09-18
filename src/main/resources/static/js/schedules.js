@@ -78,7 +78,7 @@ function paint() {
                 <td>
                     <div>${dash(s.statusLabel)}</div>
                     ${s.type === 'PRODUCTION'
-                        ? `<div class="cell-sub">검사 ${esc(s.inspectStatusLabel)}</div>` : ''}
+                        ? `<div class="cell-sub">${esc(s.inspectStatusLabel)}</div>` : ''}
                 </td>
             </tr>`, '조건에 맞는 문서가 없습니다.', 10));
 
