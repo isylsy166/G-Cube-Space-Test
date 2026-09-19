@@ -45,7 +45,7 @@ function paint() {
     const count = (fn) => all.filter(fn).length;
     const box = document.getElementById('stats');
     box.innerHTML = stats([
-        {key: '', n: all.length, label: '전체 품목', hint: '세트는 따로 관리'},
+        {key: '', n: all.length, label: '전체 품목', hint: '매입품 · 생산품 · 서비스'},
         {key: 'EMPTY', tone: 'bad', n: count(RULES.EMPTY),
             label: '가용재고 없음', hint: '지금 바로 쓸 수 없음'},
         {key: 'SERIAL', tone: 'wait', n: count(RULES.SERIAL),
