@@ -4,9 +4,13 @@ let all = [];
 let picked = null;
 let current = null;
 
+const NOT_PASSED = ['BEFORE_INSPECTION', 'WAITING_INSPECTION', 'REJECTED'];
+
 const RULES = {
-    RECEIVABLE: (s) => s.confirmed && s.remainingQuantity > 0 && s.inspectStatus !== 'WAITING_INSPECTION',
-    INSPECT: (s) => s.inspectStatus === 'WAITING_INSPECTION' || s.inspectStatus === 'BEFORE_INSPECTION',
+    // 백엔드 StockSchedule.isReceivable() 과 같은 기준
+    RECEIVABLE: (s) => s.confirmed && s.remainingQuantity > 0
+        && (s.type !== 'PRODUCTION' || s.inspectStatus === 'INSPECTED'),
+    INSPECT: (s) => NOT_PASSED.includes(s.inspectStatus),
     DRAFT: (s) => !s.confirmed
 };
 
@@ -45,9 +49,9 @@ function paint() {
     box.innerHTML = stats([
         {key: '', n: all.length, label: '전체 문서', hint: '구매발주 + 생산의뢰'},
         {key: 'RECEIVABLE', tone: 'ok', n: count(RULES.RECEIVABLE),
-            label: '입고 가능', hint: '지금 입고 처리 가능'},
+            label: '입고 가능', hint: '확정 · 검사 통과 · 잔량 있음'},
         {key: 'INSPECT', tone: 'wait', n: count(RULES.INSPECT),
-            label: '검사 대기 · 전', hint: '통과해야 입고 가능'},
+            label: '검사 미통과', hint: '검사 전 · 대기 · 불합격'},
         {key: 'DRAFT', tone: 'rev', n: count(RULES.DRAFT),
             label: '미확정', hint: '준비 판단에서 제외'}
     ], null, picked ?? '');
@@ -102,11 +106,14 @@ function render(d) {
     const s = d.schedule;
     const production = s.type === 'PRODUCTION';
     const inspected = s.inspectStatus === 'INSPECTED';
+    const rejected = s.inspectStatus === 'REJECTED';
     const canReceive = s.confirmed && s.remainingQuantity > 0 && (!production || inspected);
 
     let blocked = '';
     if (s.remainingQuantity === 0) blocked = '남은 수량이 없어 더 입고할 수 없습니다.';
     else if (!s.confirmed) blocked = '확정되지 않은 문서는 입고할 수 없습니다. 먼저 발주 확정을 누르세요.';
+    else if (rejected) blocked = '품질검사에서 불합격한 문서입니다. 이 물량은 준비 판단에서도 빠집니다. '
+        + '재검사를 통과해야 입고할 수 있습니다.';
     else if (production && !inspected) blocked = '생산의뢰는 품질검사를 통과해야 입고할 수 있습니다.';
 
     drawer.open(
@@ -114,9 +121,9 @@ function render(d) {
         `${esc(s.typeLabel)} · ${esc(s.itemCode)} · ${esc(s.warehouseCode)} 입고`,
         `
         <div class="block">
-            <div class="acts" style="padding-bottom:0">
+            <div class="acts" style="padding-bottom:8px">
                 <dl class="kv" style="width:100%">
-                    <dt>품목</dt><dd>${toItem(s.itemCode)} ${esc(s.itemName)}</dd>
+                    <dt>품목</dt><dd>${toItem(s.itemCode)} · ${esc(s.itemName)}</dd>
                     <dt>입고창고</dt><dd>${esc(s.warehouseCode)} · ${esc(s.warehouseName)}
                         ${s.warehouseActive ? '' : chip('사용 중지', 'bad')}</dd>
                     <dt>공급처</dt><dd>${esc(s.supplierName)} (${esc(s.supplierCode)})
@@ -141,8 +148,10 @@ function render(d) {
             <div class="acts">
                 <button class="btn" id="confirm" ${s.confirmed ? 'disabled' : ''}>발주 확정</button>
                 ${production ? `
-                    <button class="btn" id="pass" ${inspected ? 'disabled' : ''}>검사 통과</button>
-                    <button class="btn danger" id="fail" ${!s.confirmed ? 'disabled' : ''}>검사 불합격</button>`
+                    <button class="btn" id="pass" ${inspected ? 'disabled' : ''}>
+                        ${rejected ? '재검사 통과' : '검사 통과'}</button>
+                    <button class="btn danger" id="fail"
+                        ${!s.confirmed || rejected ? 'disabled' : ''}>검사 불합격</button>`
                     : '<span class="hint">구매발주는 품질검사 대상이 아닙니다.</span>'}
             </div>
             <div class="acts" style="border-top:1px solid var(--line-soft)">

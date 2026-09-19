@@ -217,6 +217,59 @@ class CommandFlowTest {
     }
 
     @Test
+    @DisplayName("검사 불합격은 검사 대기 문서에서도 상태가 실제로 바뀌고 입고가 막힌다")
+    void rejectedInspectionIsRecordedAndBlocksReceipt() throws Exception {
+        // MO-20260721-Z10 은 시드에서 이미 '검사 대기' 다.
+        // 불합격을 '검사 대기' 로 되돌리면 아무것도 바뀌지 않아 기록이 남았는지 알 수 없다.
+        mvc.perform(get("/api/stock-schedules/{code}", "MO-20260721-Z10"))
+                .andExpect(jsonPath("$.schedule.inspectStatusLabel").value("검사 대기"));
+
+        mvc.perform(post("/api/stock-schedules/{code}/inspection", "MO-20260721-Z10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new InspectionRequest(false))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inspectStatusLabel").value("검사 불합격"))
+                // 불합격 물량은 앞으로 들어올 수량이 아니므로 판정에서 빠진다
+                .andExpect(jsonPath("$.usableForPlanning").value(false));
+
+        mvc.perform(post("/api/stock-schedules/{code}/receipt", "MO-20260721-Z10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new ReceiptRequest(1))))
+                .andExpect(status().isConflict());
+
+        // 재검사를 통과하면 다시 입고할 수 있다
+        mvc.perform(post("/api/stock-schedules/{code}/inspection", "MO-20260721-Z10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new InspectionRequest(true))))
+                .andExpect(jsonPath("$.inspectStatusLabel").value("검사 완료"))
+                .andExpect(jsonPath("$.usableForPlanning").value(true));
+        mvc.perform(post("/api/stock-schedules/{code}/receipt", "MO-20260721-Z10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new ReceiptRequest(1))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("검사 불합격 물량을 기다리던 주문은 재고 부족으로 되돌아간다")
+    void rejectedInspectionPushesWaitingOrderBackToShortage() throws Exception {
+        // ORD202607200007 은 MO-20260721-Z10 을 기다려 '품질검사 대기' 다
+        mvc.perform(get("/api/orders/{no}", "ORD202607200007"))
+                .andExpect(jsonPath("$.readiness.statusLabel").value("품질검사 대기"))
+                .andExpect(jsonPath("$.readiness.demands[0].fromSchedule").value(1));
+
+        mvc.perform(post("/api/stock-schedules/{code}/inspection", "MO-20260721-Z10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new InspectionRequest(false))))
+                .andExpect(status().isOk());
+
+        // 들어오지 않을 물량이므로 더는 기다릴 대상이 아니다. 발주가 필요한 주문이 된다.
+        mvc.perform(get("/api/orders/{no}", "ORD202607200007"))
+                .andExpect(jsonPath("$.readiness.statusLabel").value("재고 부족"))
+                .andExpect(jsonPath("$.readiness.demands[0].fromSchedule").value(0))
+                .andExpect(jsonPath("$.readiness.demands[0].shortageQuantity").value(1));
+    }
+
+    @Test
     @DisplayName("시나리오 7 - 입고하면 현재고가 늘고 기다리던 주문이 준비 가능으로 바뀐다")
     void scenario7_receiptUnblocksOrder() throws Exception {
         mvc.perform(get("/api/orders/{no}", "ORD202607200024"))

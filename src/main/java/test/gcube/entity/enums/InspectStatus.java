@@ -16,7 +16,9 @@ public enum InspectStatus {
     /** 검사 대기. 아직 현재고가 아니다. */
     WAITING_INSPECTION("검사 대기"),
     /** 검사 완료 */
-    INSPECTED("검사 완료");
+    INSPECTED("검사 완료"),
+    /** 검사 불합격. 통과 전까지 입고할 수 없고 준비 판단에도 쓰지 않는다. */
+    REJECTED("검사 불합격");
 
     private final String label;
 

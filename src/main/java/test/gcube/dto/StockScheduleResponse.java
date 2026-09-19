@@ -8,7 +8,8 @@ import test.gcube.entity.StockSchedule;
  *
  * @param remainingQuantity 앞으로 들어올 수량 (계획수량 - 입고수량)
  * @param usableForPlanning 준비 판단에 쓸 수 있는 문서인지.
- *                          미확정 문서와 사용 중지된 창고의 문서는 제외한다.
+ *                          미확정, 사용 중지된 창고, 검사 불합격 문서는 제외한다.
+ *                          판단 기준은 {@link StockSchedule#isUsableForPlanning()} 하나만 쓴다.
  */
 public record StockScheduleResponse(
         String code,
@@ -56,7 +57,7 @@ public record StockScheduleResponse(
                 schedule.getInspectStatus().name(),
                 schedule.getInspectStatus().getLabel(),
                 schedule.isConfirmed(),
-                schedule.isConfirmed() && warehouseActive && schedule.getRemainingQuantity() > 0
+                schedule.isUsableForPlanning()
         );
     }
 }

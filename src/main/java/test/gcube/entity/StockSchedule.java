@@ -108,11 +108,23 @@ public class StockSchedule {
         this.order = order;
     }
 
-    /** 검사 결과를 기록한다. 통과해야 입고할 수 있다. (요구사항 3-5) */
+    /**
+     * 검사 결과를 기록한다. 통과해야 입고할 수 있다. (요구사항 3-5)
+     *
+     * <p>불합격은 {@code 검사 대기} 로 되돌리지 않고 {@link InspectStatus#REJECTED} 로 남긴다.
+     * 되돌리면 이미 검사 대기였던 문서에서 불합격이 아무것도 바꾸지 않아, 담당자가
+     * 기록이 남았는지 알 수 없다. 불합격 물량은 들어오지 않으므로 준비 판단에서도 빠진다.
+     */
     public void inspect(boolean passed) {
-        this.inspectStatus = passed ? InspectStatus.INSPECTED : InspectStatus.WAITING_INSPECTION;
         if (passed) {
+            this.inspectStatus = InspectStatus.INSPECTED;
             this.status = ScheduleStatus.INSPECTED;
+            return;
+        }
+        this.inspectStatus = InspectStatus.REJECTED;
+        if (this.status == ScheduleStatus.INSPECTED) {
+            // 통과로 기록했던 문서를 뒤집는 경우. 진행상태도 검사 전으로 되돌린다.
+            this.status = ScheduleStatus.PRODUCED;
         }
     }
 
@@ -134,6 +146,19 @@ public class StockSchedule {
         this.status = getRemainingQuantity() == 0
                 ? ScheduleStatus.RECEIVED
                 : ScheduleStatus.PARTIAL_RECEIVED;
+    }
+
+    /**
+     * 준비 판단(요구사항 3-2)에 쓸 수 있는 문서인지.
+     * 미확정, 사용 중지된 창고, 남은 수량 없음, 사용 가능 예정일 미정,
+     * 그리고 검사 불합격 물량은 앞으로 들어올 수량으로 보지 않는다.
+     */
+    public boolean isUsableForPlanning() {
+        return confirmed
+                && warehouse.isStatus()
+                && getRemainingQuantity() > 0
+                && availableAt != null
+                && inspectStatus != InspectStatus.REJECTED;
     }
 
     /** 생산의뢰는 검사를 통과해야 입고할 수 있다. */

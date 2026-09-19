@@ -286,7 +286,10 @@ public class ReadinessPlanner {
 
     /**
      * 창고·품목별 입고예정 풀. 확정되지 않았거나, 사용 중지된 창고로 들어오거나,
-     * 남은 수량이 없는 문서는 담지 않는다. (요구사항 3-2)
+     * 남은 수량이 없거나, 검사에서 불합격한 문서는 담지 않는다. (요구사항 3-2)
+     *
+     * <p>담을지 말지는 {@link StockSchedule#isUsableForPlanning()} 한 곳에서만 판단한다.
+     * 화면의 "판정 반영 / 제외" 표시도 같은 메서드를 쓰므로 둘이 어긋나지 않는다.
      */
     private static final class SchedulePool {
         private final Map<String, List<StockSchedule>> schedules = new LinkedHashMap<>();
@@ -295,10 +298,7 @@ public class ReadinessPlanner {
         static SchedulePool of(List<StockSchedule> all) {
             SchedulePool pool = new SchedulePool();
             for (StockSchedule schedule : all) {
-                if (!schedule.isConfirmed()
-                        || !schedule.getWarehouse().isStatus()
-                        || schedule.getRemainingQuantity() <= 0
-                        || schedule.getAvailableAt() == null) {
+                if (!schedule.isUsableForPlanning()) {
                     continue;
                 }
                 pool.schedules.computeIfAbsent(
