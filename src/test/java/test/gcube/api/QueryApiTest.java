@@ -94,6 +94,9 @@ class QueryApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lines.length()").value(1))
                 .andExpect(jsonPath("$.lines[0].kind").value("SET"))
+                // 세트명이 코드가 아니라 사람이 읽는 이름으로 나오고 한글이 깨지지 않는다
+                .andExpect(jsonPath("$.lines[0].code").value("SET-Z10-DMN-K"))
+                .andExpect(jsonPath("$.lines[0].name").value("Z10 + 데이먼 풀세트 K"))
                 .andExpect(jsonPath("$.readiness.demands.length()").value(3))
                 .andExpect(jsonPath("$.readiness.demands[?(@.itemCode=='MAT-Z10-K')].requiredQuantity").value(1))
                 .andExpect(jsonPath("$.readiness.demands[?(@.itemCode=='FRM-DMN-K')].requiredQuantity").value(1))

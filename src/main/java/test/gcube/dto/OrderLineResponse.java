@@ -18,7 +18,7 @@ public record OrderLineResponse(
                 detail.getSequence(),
                 set ? "SET" : "ITEM",
                 set ? detail.getItemSet().getCode() : detail.getItem().getCode(),
-                set ? detail.getItemSet().getCode() : detail.getItem().getName(),
+                set ? detail.getItemSet().getName() : detail.getItem().getName(),
                 detail.getOrderQuantity(),
                 detail.getStatus().name(),
                 detail.getStatus().getLabel());

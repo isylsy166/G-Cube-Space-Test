@@ -33,8 +33,13 @@ public class ItemSet {
     @Column(name = "code", nullable = false, length = 50)
     private String code;
 
+    /** 세트명 (예: Z10 + 데이먼 세트 Q) */
+    @Column(name = "name", nullable = false, length = 100)
+    private String name;
+
     @Builder
-    public ItemSet(String code) {
+    public ItemSet(String code, String name) {
         this.code = code;
+        this.name = name;
     }
 }
