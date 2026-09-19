@@ -25,6 +25,15 @@ services:
       - --log-queries-not-using-indexes=1
     volumes:
       - mysql-data:/var/lib/mysql
+      # 스키마와 과제 데이터를 컨테이너가 처음 뜰 때 한 번 적재한다.
+      # initdb 는 파일명 순서로 실행하므로 숫자를 붙여 순서를 못박는다.
+      # (원본 파일명 그대로 두면 sample.sql 이 schema.sql 보다 먼저 실행된다.)
+      #
+      # 이 스크립트는 데이터 디렉터리가 비어 있을 때만 돈다. 즉 앱이 처리한
+      # 예약·출고·입고 결과는 컨테이너를 다시 띄워도 남는다.
+      # 기준 데이터로 되돌리려면 볼륨째 지워야 한다: docker compose down -v
+      - ./src/main/resources/schema/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./src/main/resources/schema/sample.sql:/docker-entrypoint-initdb.d/02-sample.sql:ro
     healthcheck:
       # mysqladmin ping 은 서버가 접속을 받기 전에도 성공할 수 있어, 실제 쿼리로 확인한다.
       test: ["CMD", "mysql", "-h", "127.0.0.1", "-u", "gcube", "-pgcube", "-e", "SELECT 1"]
