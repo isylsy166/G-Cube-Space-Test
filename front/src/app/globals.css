@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-noto-sans-kr), system-ui, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, monospace;
+
+  /* 프로토타입 팔레트 */
+  --color-canvas: #f6f6f9;
+  --color-surface: #ffffff;
+  --color-ink: #14141c;
+  --color-ink-soft: #3b3b4b;
+  --color-ink-muted: #5d5d6e;
+  --color-ink-faint: #8a8a99;
+  --color-ink-dim: #a0a0af;
+  --color-ink-ghost: #b4b4c2;
+  --color-line: #ececf2;
+  --color-line-soft: #f4f4f8;
+  --color-accent: #4c4f8a;
+  --color-good: #0e7c66;
+  --color-warn: #a4600b;
+  --color-bad: #c2410c;
+
+  /* 준비가 막힌 줄을 목록에서 바로 알아보게 하는 배경 */
+  --color-bad-wash: #fdf6f2;
+  --color-review-wash: #f8f8fa;
+}
+
+html,
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+body {
+  /* 표가 조밀한 화면이라 본문을 한 단계 키워 장시간 봐도 덜 피로하게 둔다. */
+  font-size: 13.5px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d8d8e2;
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 표는 가로로만 스크롤되고 페이지 본문은 절대 가로로 밀리지 않게 한다. */
+.table-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
