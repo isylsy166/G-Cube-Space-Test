@@ -14,6 +14,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.context.jdbc.Sql;
 import test.gcube.dto.InspectionRequest;
 import test.gcube.dto.ReceiptRequest;
 import test.gcube.dto.ScheduleCreateRequest;
@@ -27,6 +28,9 @@ import test.gcube.dto.ScheduleCreateRequest;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+// 테스트마다 기준 데이터를 다시 적재한다. 개발용 MySQL 은 실행 중인 앱과
+// 공유하므로, 앞선 실행이나 브라우저가 남긴 상태에 기대지 않는다.
+@Sql("classpath:schema/sample.sql")
 class CommandFlowTest {
 
     @Autowired MockMvc mvc;

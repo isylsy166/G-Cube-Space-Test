@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.jdbc.Sql;
 
 /**
  * 조회 API 가 요구사항 3-1 / 3-2 / 3-3 / 3-6 을 지키는지 확인한다.
@@ -18,6 +19,9 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+// 테스트마다 기준 데이터를 다시 적재한다. 개발용 MySQL 은 실행 중인 앱과
+// 공유하므로, 앞선 실행이나 브라우저가 남긴 상태에 기대지 않는다.
+@Sql("classpath:schema/sample.sql")
 class QueryApiTest {
 
     @Autowired

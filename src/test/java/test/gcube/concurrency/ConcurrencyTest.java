@@ -32,7 +32,7 @@ import test.gcube.service.OrderCommandService;
 import test.gcube.service.ScheduleCommandService;
 
 /**
- * 동시 요청에서 숫자가 어긋나지 않는지 확인한다. (요구사항 6)
+ * 동시 요청에서 숫자가 어긋나지 않는지 확
  *
  * <p>여기서는 트랜잭션을 실제로 커밋해야 락이 의미가 있으므로 {@code @Transactional} 을 쓰지 않고,
  * 각 테스트 전후로 기준 데이터를 다시 적재한다.
