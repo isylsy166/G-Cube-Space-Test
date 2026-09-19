@@ -194,6 +194,11 @@ tbody tr.row:hover { background: var(--surface-2); }
 tbody tr.row[aria-selected="true"] { background: var(--accent-weak); }
 tbody tr.muted td { color: var(--ink-3); }
 
+/* 세트 주문 아래 펼친 구성품 행. 원 주문 라인에 딸린 것임이 보이게 들여 쓴다. */
+tbody tr.comp > td { background: var(--surface-2); border-bottom-style: dashed; }
+tbody tr.comp > td:first-child { border-left: 2px solid var(--line-soft); }
+tbody tr.comp .cell-main { font-weight: 500; }
+
 .cell-main { font-weight: 600; }
 .cell-sub  { font-size: 12px; color: var(--ink-3); }
 

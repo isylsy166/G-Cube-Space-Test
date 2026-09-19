@@ -14,6 +14,8 @@ import test.gcube.dto.OrderSummaryResponse;
 import test.gcube.dto.ReservationResponse;
 import test.gcube.dto.StockLedgerResponse;
 import test.gcube.dto.StockScheduleResponse;
+import test.gcube.entity.ItemSetComponent;
+import test.gcube.entity.OrderDetail;
 import test.gcube.entity.Orders;
 import test.gcube.entity.enums.OrderStatus;
 import test.gcube.entity.enums.ReadinessStatus;
@@ -37,6 +39,7 @@ public class OrderQueryService {
     private final StockScheduleRepository stockScheduleRepository;
     private final StockLedgerRepository stockLedgerRepository;
     private final ReadinessPlanner readinessPlanner;
+    private final SetExpander setExpander;
 
     /**
      * 배송예정일·접수일시 순으로 정렬한 주문 목록에 준비 판정을 붙인다.
@@ -64,10 +67,14 @@ public class OrderQueryService {
 
         OrderReadinessResponse readiness = readinessPlanner.plan(orderNumber);
 
+        // 원 주문 라인에 세트 구성품을 붙여, 아래 readiness.demands 로 어떻게 전개됐는지
+        // 화면에서 대응이 보이게 한다. (요구사항 4-2)
+        List<OrderDetail> lines = orderDetailRepository.findByOrderIdWithRefs(order.getId());
+        Map<Long, List<ItemSetComponent>> componentsBySet = setExpander.loadComponents(lines);
+
         return new OrderDetailResponse(
                 OrderSummaryResponse.of(order, order.isPreparationTarget() ? readiness : null),
-                orderDetailRepository.findByOrderIdWithRefs(order.getId()).stream()
-                        .map(OrderLineResponse::from).toList(),
+                lines.stream().map(d -> OrderLineResponse.from(d, componentsBySet)).toList(),
                 readiness,
                 orderReservationRepository.findByOrderIdWithRefs(order.getId()).stream()
                         .map(ReservationResponse::from).toList(),

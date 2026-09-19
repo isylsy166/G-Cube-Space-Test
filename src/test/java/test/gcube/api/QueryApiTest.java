@@ -105,6 +105,48 @@ class QueryApiTest {
     }
 
     @Test
+    @DisplayName("세트 주문 라인은 구성품을 함께 주고 제외 항목에 한글 사유가 붙는다")
+    void setLineCarriesItsComponents() throws Exception {
+        // ORD202607200002 순번 1 = SET-Z10-DMN-Q 1개
+        mvc.perform(get("/api/orders/{no}", "ORD202607200002"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lines[0].kind").value("SET"))
+                .andExpect(jsonPath("$.lines[0].code").value("SET-Z10-DMN-Q"))
+                // 준비 대상 구성품이 앞, 제외되는 항목이 뒤
+                .andExpect(jsonPath("$.lines[0].components[0].stockDemand").value(true))
+                .andExpect(jsonPath("$.lines[0].components[0].itemCode").value("FRM-DMN-Q"))
+                .andExpect(jsonPath("$.lines[0].components[1].itemCode").value("MAT-Z10-Q"))
+                // 설치서비스는 재고 수요를 만들지 않고 사유가 붙는다 (요구사항 3-1).
+                // SET-Z10-DMN-Q 의 SVC-INSTALL 은 is_shipping = FALSE 라
+                // 서비스 품목이기 이전에 '출고 대상 아님' 으로 먼저 걸린다. SetExpander 와 같은 순서다.
+                .andExpect(jsonPath("$.lines[0].components[?(@.itemCode=='SVC-INSTALL')].stockDemand")
+                        .value(false))
+                .andExpect(jsonPath("$.lines[0].components[?(@.itemCode=='SVC-INSTALL')].excludeReason")
+                        .value("출고 대상이 아닌 구성품이라 준비 수량에서 제외됩니다."))
+                // 전개 결과에 서비스는 들어가지 않는다
+                .andExpect(jsonPath("$.readiness.demands[?(@.itemCode=='SVC-INSTALL')]").isEmpty());
+
+        // 단품 라인에는 구성품이 없다
+        mvc.perform(get("/api/orders/{no}", "ORD202607200001"))
+                .andExpect(jsonPath("$.lines[0].kind").value("ITEM"))
+                .andExpect(jsonPath("$.lines[0].components.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("구성품 수량은 세트당 수량 × 주문 수량으로 전개된다")
+    void componentQuantityIsMultipliedByOrderQuantity() throws Exception {
+        mvc.perform(get("/api/orders/{no}", "ORD202607200002"))
+                .andExpect(jsonPath("$.lines[0].orderQuantity").value(1))
+                .andExpect(jsonPath("$.lines[0].components[?(@.itemCode=='MAT-Z10-Q')].quantityPerSet")
+                        .value(1))
+                .andExpect(jsonPath("$.lines[0].components[?(@.itemCode=='MAT-Z10-Q')].requiredQuantity")
+                        .value(1))
+                // 같은 값이 준비 수요로 이어진다
+                .andExpect(jsonPath("$.readiness.demands[?(@.itemCode=='MAT-Z10-Q')].requiredQuantity")
+                        .value(1));
+    }
+
+    @Test
     @DisplayName("단품으로 주문된 서비스 항목도 준비 수량에서 빠진다")
     void serviceOrderedAloneIsExcluded() throws Exception {
         // 1번 라인 SET-Z10-DMN-Q, 2번 라인 SVC-DISPOSAL

@@ -127,7 +127,7 @@ function render(d) {
         </div>
 
         <div class="block">
-            <h3>준비해야 할 품목 — 세트를 전개하고 서비스를 뺀 결과</h3>
+            <h3>준비해야 할 품목</h3>
             ${grid(['품목', {n: '필요'}, {n: '가용'}, {n: '현재고'}, {n: '입고예정'}, {n: '부족'}, ''],
                 body(r.demands, (x) => `
                     <tr>
@@ -161,7 +161,22 @@ function render(d) {
                     </td>
                     <td class="num">${l.orderQuantity}</td>
                     <td>${l.status === 'CANCELED' ? chip('취소', 'bad') : chip('정상', 'ok')}</td>
-                </tr>`, '주문 상세가 없습니다.', 5)))}
+                </tr>
+                ${l.components.map((c) => `
+                    <tr class="comp ${l.status === 'CANCELED' || !c.stockDemand ? 'muted' : ''}">
+                        <td></td>
+                        <td class="cell-sub">└</td>
+                        <td>
+                            <div class="cell-main">${toItem(c.itemCode)}</div>
+                            <div class="cell-sub">${esc(c.itemName)} · ${esc(c.typeLabel)}${
+                                c.serial ? ' · 시리얼' : ''}</div>
+                        </td>
+                        <td class="num">${c.requiredQuantity}
+                            <div class="cell-sub">${c.quantityPerSet}/세트</div></td>
+                        <td>${c.stockDemand
+                            ? chip('준비 대상', 'ok')
+                            : `<span class="hint">${esc(c.excludeReason)}</span>`}</td>
+                    </tr>`).join('')}`, '주문 상세가 없습니다.', 5)))}
 
         ${sec('잡아둔 재고', d.reservations.length, grid(
             ['품목', '창고', {n: '수량'}, '상태'],
