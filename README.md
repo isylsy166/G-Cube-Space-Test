@@ -44,15 +44,15 @@ docker compose down -v && docker compose up -d
 ### 테스트
 
 ```bash
-./gradlew test           # 58개. MySQL 컨테이너가 떠 있어야 한다
+./gradlew test           # 68개. MySQL 컨테이너가 떠 있어야 한다
 ```
 
 | 클래스 | 건수 | 확인하는 것 |
 | --- | ---: | --- |
 | `ReadinessApiTest` | 11 | 세트 전개, 준비 판정, 우선순위 배분, 확인 필요 주문 |
 | `QueryApiTest` | 16 | 조회 API 가 업무 규칙대로 보여 주는지 |
-| `CommandFlowTest` | 22 | 예약→피킹→출고, 발주→검사→입고, 반복 요청 |
-| `ConcurrencyTest` | 6 | 동시 요청에서 숫자가 어긋나지 않는지 |
+| `CommandFlowTest` | 31 | 예약→피킹→출고, 출고 제품 직접 선택과 배정 해제, 발주→검사→입고, 반복 요청 |
+| `ConcurrencyTest` | 7 | 동시 요청에서 숫자가 어긋나지 않는지, 같은 개체를 동시에 골라도 한 주문에만 배정되는지 |
 | `PageRoutingTest` | 2 | 화면 라우팅과 정적 자원 |
 
 테스트는 개발용 MySQL 을 실행 중인 앱과 공유합니다. 화면에서 발주 하나만 만들어도 문서 수와
@@ -68,7 +68,7 @@ docker compose down -v && docker compose up -d
 | 화면 | 주소 | 내용 |
 | --- | --- | --- |
 | 제품 | `/items` | 창고별 현재고·예약·가용, 시리얼 개체와 배정된 주문, 이 품목을 기다리는 주문, 걸려 있는 발주 문서, 수량 변경 이력 |
-| 주문 | `/orders` | 준비 판정과 부족 수량, 원 주문 라인과 세트 전개 결과, 예약→피킹→출고 액션, 부족 품목에서 발주 생성 |
+| 주문 | `/orders` | 준비 판정과 부족 수량, 원 주문 라인과 세트 전개 결과, 예약→피킹→출고 액션, 출고할 시리얼 제품 직접 선택·해제, 부족 품목에서 발주 생성 |
 | 발주 | `/schedules` | 제공된 문서와 앱에서 만든 문서를 한 목록에서, 확정·품질검사·입고 처리, 어느 주문 때문에 생겼는지 |
 
 세 화면은 품목코드·주문번호·문서번호를 주소에 실어 서로 오갑니다. 주문의 부족 품목에서 발주를
@@ -151,7 +151,8 @@ docker compose down -v && docker compose up -d
 
 **상태로 구분되는 것은 상태로 막습니다.** 이미 예약이 있으면 다시 예약하지 않고 현재 상태를
 돌려줍니다. 이미 출고된 주문은 아무것도 바꾸지 않습니다. 피킹은 이미 배정된 개체 수를 세어
-모자란 만큼만 채웁니다. 같은 요청을 몇 번 보내도 결과가 같습니다.
+모자란 만큼만 채웁니다. 직접 고른 개체를 다시 보내도 이미 이 주문 것이면 넘어갑니다.
+같은 요청을 몇 번 보내도 결과가 같습니다.
 
 **상태로는 구분할 수 없는 것은 멱등 키를 씁니다.** 발주 생성과 입고 처리는 "같은 수량을 또
 넣는 것"이 업무적으로 정상일 수 있어 상태만으로 중복인지 판단할 수 없습니다. 그래서 호출자가
@@ -186,7 +187,7 @@ docker compose down -v && docker compose up -d
 | 단계 | 방식 |
 | --- | --- |
 | 예약 | 화면에서 본 숫자도 판정 때 읽어 둔 숫자도 믿지 않고, 재고 행을 잠그면서 DB 의 최신 값으로 덮어쓴다. 한 품목이라도 가용재고가 모자라면 예외를 던져 앞서 잡은 예약까지 전부 되돌린다. 일부만 잡힌 상태가 남지 않는다 |
-| 피킹 | 예약 행과 이미 배정된 개체를 잠근다. 보관 중인 개체만 고르므로 같은 개체가 두 주문에 배정되지 않는다 |
+| 피킹 | 예약 행과 개체 행을 잠근다. 보관 중인 개체만 고르므로 같은 개체가 두 주문에 배정되지 않는다. 담당자가 직접 고른 경우도 같다. 화면에서 본 후보가 아니라 잠그고 다시 읽은 상태로 판단하고, 한 개라도 조건에 맞지 않으면 한 개도 배정하지 않는다 |
 | 출고 | 현재고와 그 주문의 예약수량을 함께 줄인다. 예약을 `출고 완료`로 표시해 반복 호출해도 한 번만 반영된다. 시리얼 피킹이 끝나지 않으면 출고를 거부한다 |
 | 입고 | 문서 행을 잠그고 누적 입고수량이 계획수량을 넘는지 검사한다. 넘으면 거부한다 |
 
@@ -256,7 +257,9 @@ docker compose down -v && docker compose up -d
 | `GET` | `/api/orders` | 주문 목록 + 준비 판정. `status` · `readiness` · `warehouseCode` 로 필터 |
 | `GET` | `/api/orders/{orderNumber}` | 원 주문 라인(세트는 구성품 포함), 판정, 예약, 개체, 발주, 이력 |
 | `POST` | `/api/orders/{orderNumber}/reservation` | 재고 예약 |
-| `POST` | `/api/orders/{orderNumber}/picking` | 시리얼 피킹 |
+| `GET` | `/api/orders/{orderNumber}/pickable-units` | 직접 선택용 후보 개체. 시리얼 품목별 예약수량·배정 개체·고를 수 있는 개체 |
+| `POST` | `/api/orders/{orderNumber}/picking` | 시리얼 피킹. 본문에 `serialNumbers` 를 주면 그 개체만, 없으면 자동 배정 |
+| `DELETE` | `/api/orders/{orderNumber}/picking/{serialNumber}` | 배정 해제. 출고 전까지 잘못 고른 개체를 되돌린다 |
 | `POST` | `/api/orders/{orderNumber}/shipment` | 출고 |
 | `POST` | `/api/orders/{orderNumber}/purchase-orders` | 부족 품목에서 발주·생산의뢰 생성 (`Idempotency-Key`) |
 | `GET` | `/api/stock-schedules` | 문서 목록. `type` · `warehouseCode` · `itemCode` · `confirmed` 로 필터 |
@@ -271,4 +274,4 @@ docker compose down -v && docker compose up -d
 
 ### 일정
 
-![일정](back/src/main/resources/static/image/img.png)
+![img.png](img.png)
