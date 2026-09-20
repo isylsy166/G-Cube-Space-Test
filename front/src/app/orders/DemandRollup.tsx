@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { useOrderDetails } from "@/lib/hooks";
 import { dateWithWeekday, ddayColor, ddayLabel } from "@/lib/basetime";
 import { Card, CardHeader, EmptyRow, GroupHeader } from "@/components/ui";
 import type { OrderSummary } from "@/lib/types";
@@ -34,22 +33,18 @@ type DateGroup = {
  * 확인이 필요한 주문은 준비 대상이 아니므로 애초에 수요가 비어 있다.
  */
 export function DemandRollup({ orders }: { orders: OrderSummary[] }) {
-  // 판정 대상인 주문만 상세를 받는다. 취소·출고완료 주문은 준비 수요가 없다.
-  const targets = useMemo(
-    () => orders.filter((o) => o.preparationTarget).map((o) => o.orderNumber),
-    [orders],
-  );
-  const { data, isLoading, error } = useOrderDetails(targets);
+  // 목록 응답이 세트 전개 결과(demands)까지 함께 준다. 주문마다 상세를 다시 부르면
+  // 그 한 건이 서버에서 전역 판정을 한 번씩 더 돌린다.
+  const data = useMemo(() => orders.filter((o) => o.preparationTarget), [orders]);
 
   const groups = useMemo<DateGroup[]>(() => {
-    if (!data) return [];
     const byDate = new Map<string, { orders: Set<string>; items: Map<string, Row> }>();
 
     for (const d of data) {
-      const date = d.order.deliveryAt.slice(0, 10);
+      const date = d.deliveryAt.slice(0, 10);
       const g = byDate.get(date) ?? { orders: new Set<string>(), items: new Map<string, Row>() };
-      g.orders.add(d.order.orderNumber);
-      for (const n of d.readiness.demands) {
+      g.orders.add(d.orderNumber);
+      for (const n of d.demands) {
         const row = g.items.get(n.itemCode) ?? {
           itemCode: n.itemCode,
           itemName: n.itemName,
@@ -63,7 +58,7 @@ export function DemandRollup({ orders }: { orders: OrderSummary[] }) {
         row.fromStock += n.fromStock;
         row.fromSchedule += n.fromSchedule;
         row.shortage += n.shortageQuantity;
-        row.orders.push(d.order.orderNumber);
+        row.orders.push(d.orderNumber);
         g.items.set(n.itemCode, row);
       }
       byDate.set(date, g);
@@ -112,11 +107,7 @@ export function DemandRollup({ orders }: { orders: OrderSummary[] }) {
         }
       />
 
-      {error ? (
-        <EmptyRow>준비 품목을 계산하지 못했습니다. 잠시 후 다시 시도해 주세요.</EmptyRow>
-      ) : isLoading ? (
-        <EmptyRow>준비 품목을 계산하는 중…</EmptyRow>
-      ) : groups.length === 0 ? (
+      {groups.length === 0 ? (
         <EmptyRow>이 조건에는 준비할 재고 품목이 없습니다.</EmptyRow>
       ) : (
         <div className="table-scroll">

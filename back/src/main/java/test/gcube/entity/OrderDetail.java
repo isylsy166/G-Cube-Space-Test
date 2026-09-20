@@ -54,6 +54,16 @@ public class OrderDetail {
     @JoinColumn(name = "item_set_id")
     private ItemSet itemSet;
 
+    /**
+     * 주문서에 적혀 있었지만 품목으로 등록되지 않은 코드. (요구사항 3-6)
+     *
+     * <p>{@link #item} 과 {@link #itemSet} 이 모두 비어 있을 때만 값이 있다. 이 값을 버리면
+     * 담당자에게 "등록되지 않은 품목이 있다" 까지만 말할 수 있고, 어느 코드를 등록해야
+     * 하는지는 알려 줄 수 없다.
+     */
+    @Column(name = "raw_item_code", length = 50)
+    private String rawItemCode;
+
     /** 주문 내 품목 순서 */
     @Column(name = "sequence", nullable = false)
     private int sequence;
@@ -67,19 +77,30 @@ public class OrderDetail {
     private OrderLineStatus status;
 
     @Builder
-    public OrderDetail(Orders order, Item item, ItemSet itemSet, int sequence,
-                       int orderQuantity, OrderLineStatus status) {
+    public OrderDetail(Orders order, Item item, ItemSet itemSet, String rawItemCode,
+                       int sequence, int orderQuantity, OrderLineStatus status) {
         this.order = order;
         this.item = item;
         this.itemSet = itemSet;
+        this.rawItemCode = rawItemCode;
         this.sequence = sequence;
         this.orderQuantity = orderQuantity;
         this.status = status;
     }
 
-    /** 준비 수량에 넣어야 하는 라인인지 */
+    /**
+     * 준비 수량에 넣어야 하는 라인인지.
+     *
+     * <p>미등록 품목 라인은 정상 상태여도 수요를 만들지 않는다. 무엇을 준비해야 할지
+     * 알 수 없기 때문이다. 대신 {@link #isUnregistered()} 가 확인 사유를 만든다.
+     */
     public boolean isPreparable() {
-        return status == OrderLineStatus.NORMAL;
+        return status == OrderLineStatus.NORMAL && !isUnregistered();
+    }
+
+    /** 품목으로도 세트로도 이어지지 않는 라인. 담당자가 품목을 등록해야 한다. (요구사항 3-6) */
+    public boolean isUnregistered() {
+        return item == null && itemSet == null;
     }
 
     /** 세트 주문 여부 */

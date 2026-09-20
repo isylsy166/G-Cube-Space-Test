@@ -1,5 +1,7 @@
 package test.gcube.dto;
 
+import java.time.LocalDate;
+
 /**
  * 부족 주문에서 넘어와 발주·생산의뢰를 만드는 요청. (요구사항 3-5)
  *
@@ -9,10 +11,13 @@ package test.gcube.dto;
  * @param itemCode     부족한 품목
  * @param quantity     발주 수량. 비우면 판정이 계산한 부족수량을 그대로 쓴다.
  * @param supplierCode 공급처. 비우면 품목의 기본 공급처를 쓴다.
+ * @param availableAt  사용 가능 예정일. 비우면 `기준시각 + 공급처 리드타임` 을 쓴다.
+ *                     공급처를 바꾸면 리드타임이 달라지므로 담당자가 직접 고칠 수 있어야 한다.
  */
 public record ScheduleCreateRequest(
         String itemCode,
         Integer quantity,
-        String supplierCode
+        String supplierCode,
+        LocalDate availableAt
 ) {
 }

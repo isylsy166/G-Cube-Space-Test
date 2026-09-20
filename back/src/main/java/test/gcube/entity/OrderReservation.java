@@ -24,6 +24,10 @@ import test.gcube.entity.enums.ReservationStatus;
  * 한 주문이 어느 재고에서 몇 개를 잡아두었는지. {@link Stock#getBookedQuantity()} 의 내역이다.
  *
  * <p>(주문, 품목) UNIQUE 제약이 같은 예약 요청의 중복 반영을 막는다.
+ *
+ * <p>{@code order} 가 비어 있는 행은 기준시각에 이미 잡혀 있던 예약이다. 앱이 모르는
+ * 주문이라 {@link Orders} 를 만들 수 없지만, 그렇다고 버리면 "이 예약수량을 누가 잡고
+ * 있는지" 를 화면에서 답할 수 없다. 그래서 보유자를 {@link #externalReference} 에 남긴다.
  */
 @Entity
 @Table(
@@ -42,9 +46,14 @@ public class OrderReservation {
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "order_id", nullable = false)
+    /** 앱이 처리한 예약만 값이 있다. 기준시각 이전 예약은 비어 있다. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id")
     private Orders order;
+
+    /** 앱 밖에서 잡은 예약의 주문번호. {@link #order} 가 비어 있을 때만 값이 있다. */
+    @Column(name = "external_reference", length = 50)
+    private String externalReference;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "item_id", nullable = false)
@@ -66,8 +75,10 @@ public class OrderReservation {
     private LocalDateTime createdAt;
 
     @Builder
-    public OrderReservation(Orders order, Item item, Stock stock, int quantity) {
+    public OrderReservation(Orders order, String externalReference, Item item, Stock stock,
+                            int quantity) {
         this.order = order;
+        this.externalReference = externalReference;
         this.item = item;
         this.stock = stock;
         this.quantity = quantity;
@@ -77,5 +88,15 @@ public class OrderReservation {
     /** 출고 처리되면 예약이 소비된다. */
     public void ship() {
         this.status = ReservationStatus.SHIPPED;
+    }
+
+    /** 화면에 보여 줄 예약 보유자. 앱 밖에서 잡은 것이면 그 번호를 준다. */
+    public String holderOrderNumber() {
+        return order != null ? order.getOrderNumber() : externalReference;
+    }
+
+    /** 이 앱이 처리한 예약인지. 아니면 기준시각 이전에 이미 잡혀 있던 것이다. */
+    public boolean isManagedHere() {
+        return order != null;
     }
 }

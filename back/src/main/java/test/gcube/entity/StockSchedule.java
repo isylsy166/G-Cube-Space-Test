@@ -75,6 +75,13 @@ public class StockSchedule {
     @Column(name = "available_at")
     private LocalDateTime availableAt;
 
+    /**
+     * 검사를 통과한 수량. 생산의뢰만 쓴다. 입고는 이 수량까지만 허용한다.
+     * 검사 전에는 0 이며, 이 값이 0 인 생산의뢰는 한 개도 입고할 수 없다.
+     */
+    @Column(name = "inspected_quantity", nullable = false)
+    private int inspectedQuantity;
+
     /** 검사 상태 (해당 없음 / 검사 전 / 검사 대기 / 검사 완료) */
     @Enumerated(EnumType.STRING)
     @Column(name = "inspect_status", nullable = false, length = 30)
@@ -93,7 +100,8 @@ public class StockSchedule {
     public StockSchedule(Supplier supplier, Warehouse warehouse, Item item, String code,
                          ScheduleType type, ScheduleStatus status, int planQuantity,
                          int receivedQuantity, LocalDateTime availableAt,
-                         InspectStatus inspectStatus, boolean confirmed, Orders order) {
+                         int inspectedQuantity, InspectStatus inspectStatus,
+                         boolean confirmed, Orders order) {
         this.supplier = supplier;
         this.warehouse = warehouse;
         this.item = item;
@@ -103,28 +111,53 @@ public class StockSchedule {
         this.planQuantity = planQuantity;
         this.receivedQuantity = receivedQuantity;
         this.availableAt = availableAt;
+        this.inspectedQuantity = inspectedQuantity;
         this.inspectStatus = inspectStatus;
         this.confirmed = confirmed;
         this.order = order;
     }
 
     /**
-     * 검사 결과를 기록한다. 통과해야 입고할 수 있다. (요구사항 3-5)
+     * 검사 결과를 기록한다. 통과한 수량만 입고할 수 있다. (요구사항 3-5)
      *
-     * <p>불합격은 {@code 검사 대기} 로 되돌리지 않고 {@link InspectStatus#REJECTED} 로 남긴다.
-     * 되돌리면 이미 검사 대기였던 문서에서 불합격이 아무것도 바꾸지 않아, 담당자가
-     * 기록이 남았는지 알 수 없다. 불합격 물량은 들어오지 않으므로 준비 판단에서도 빠진다.
+     * <p>검사는 전량 합격/전량 불합격이 아니다. 생산한 물량 중 일부만 합격하는 것이
+     * 오히려 흔하다. 그래서 통과 수량을 받아 {@link #inspectedQuantity} 에 기록하고,
+     * 입고는 그 수량까지만 허용한다. 나머지는 불합격분이라 현재고가 되지 않는다.
+     *
+     * <p>통과 수량이 0 이면 전량 불합격이다. 이때 {@code 검사 대기} 로 되돌리지 않고
+     * {@link InspectStatus#REJECTED} 로 남긴다. 되돌리면 이미 검사 대기였던 문서에서
+     * 불합격이 아무것도 바꾸지 않아, 담당자가 기록이 남았는지 알 수 없다.
+     *
+     * @param passedQuantity 검사를 통과한 수량. 계획수량을 넘을 수 없다.
      */
-    public void inspect(boolean passed) {
-        if (passed) {
-            this.inspectStatus = InspectStatus.INSPECTED;
-            this.status = ScheduleStatus.INSPECTED;
+    public void inspect(int passedQuantity) {
+        if (passedQuantity < 0) {
+            throw new IllegalStateException("검사 통과 수량은 0 이상이어야 합니다.");
+        }
+        if (passedQuantity > planQuantity) {
+            throw new IllegalStateException(
+                    "검사 통과 수량(%d)이 계획수량(%d)을 넘을 수 없습니다."
+                            .formatted(passedQuantity, planQuantity));
+        }
+        if (passedQuantity < receivedQuantity) {
+            // 이미 들어온 물량을 불합격으로 되돌릴 수는 없다. 입고를 취소하는 기능이 아니다.
+            throw new IllegalStateException(
+                    "이미 %d 개가 입고되어 통과 수량을 %d 개로 낮출 수 없습니다."
+                            .formatted(receivedQuantity, passedQuantity));
+        }
+
+        this.inspectedQuantity = passedQuantity;
+        if (passedQuantity == 0) {
+            this.inspectStatus = InspectStatus.REJECTED;
+            if (this.status == ScheduleStatus.INSPECTED) {
+                this.status = ScheduleStatus.PRODUCED;
+            }
             return;
         }
-        this.inspectStatus = InspectStatus.REJECTED;
-        if (this.status == ScheduleStatus.INSPECTED) {
-            // 통과로 기록했던 문서를 뒤집는 경우. 진행상태도 검사 전으로 되돌린다.
-            this.status = ScheduleStatus.PRODUCED;
+        this.inspectStatus = InspectStatus.INSPECTED;
+        if (this.status != ScheduleStatus.PARTIAL_RECEIVED
+                && this.status != ScheduleStatus.RECEIVED) {
+            this.status = ScheduleStatus.INSPECTED;
         }
     }
 
@@ -142,6 +175,13 @@ public class StockSchedule {
                     "남은 수량(%d)보다 많이 입고할 수 없습니다. 요청 수량: %d"
                             .formatted(getRemainingQuantity(), quantity));
         }
+        if (quantity > getReceivableQuantity()) {
+            // 생산의뢰에서 검사를 통과하지 않은 물량. 계획수량 안이어도 들어올 수 없다.
+            throw new IllegalStateException(
+                    "검사를 통과한 %d 개 중 %d 개가 이미 입고되어 %d 개까지만 입고할 수 있습니다. 요청 수량: %d"
+                            .formatted(inspectedQuantity, receivedQuantity,
+                                    getReceivableQuantity(), quantity));
+        }
         this.receivedQuantity += quantity;
         this.status = getRemainingQuantity() == 0
                 ? ScheduleStatus.RECEIVED
@@ -156,9 +196,34 @@ public class StockSchedule {
     public boolean isUsableForPlanning() {
         return confirmed
                 && warehouse.isStatus()
-                && getRemainingQuantity() > 0
+                && getUsableQuantity() > 0
                 && availableAt != null
                 && inspectStatus != InspectStatus.REJECTED;
+    }
+
+    /**
+     * 앞으로 실제로 들어올 수 있는 수량. 준비 판단은 이 값을 쓴다.
+     *
+     * <p>검사를 마친 생산의뢰는 통과한 만큼만 들어온다. 남은 계획수량이 아니라
+     * 불합격분을 뺀 수량을 세야 한다. 그러지 않으면 들어오지 않을 물량을 기다리며
+     * 주문이 '생산 완료 대기' 로 남고, 담당자는 발주해야 할 시점을 놓친다.
+     */
+    public int getUsableQuantity() {
+        if (inspectStatus == InspectStatus.REJECTED) {
+            return 0;  // 불합격 물량은 들어오지 않는다
+        }
+        if (type == ScheduleType.PRODUCTION && inspectStatus == InspectStatus.INSPECTED) {
+            return Math.max(0, inspectedQuantity - receivedQuantity);
+        }
+        return getRemainingQuantity();
+    }
+
+    /** 지금 입고할 수 있는 수량. 생산의뢰는 검사를 통과한 만큼으로 막힌다. */
+    public int getReceivableQuantity() {
+        if (type != ScheduleType.PRODUCTION) {
+            return getRemainingQuantity();
+        }
+        return Math.max(0, Math.min(getRemainingQuantity(), inspectedQuantity - receivedQuantity));
     }
 
     /** 생산의뢰는 검사를 통과해야 입고할 수 있다. */
@@ -166,7 +231,10 @@ public class StockSchedule {
         if (!confirmed || getRemainingQuantity() == 0) {
             return false;
         }
-        return type != ScheduleType.PRODUCTION || inspectStatus == InspectStatus.INSPECTED;
+        if (type != ScheduleType.PRODUCTION) {
+            return true;
+        }
+        return inspectStatus == InspectStatus.INSPECTED && getReceivableQuantity() > 0;
     }
 
     public void confirm() {

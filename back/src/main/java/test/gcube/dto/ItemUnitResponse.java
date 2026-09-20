@@ -10,7 +10,9 @@ public record ItemUnitResponse(
         String status,
         String statusLabel,
         boolean onHand,
-        String assignedOrderNumber
+        String assignedOrderNumber,
+        /** 앱 밖에서 잡은 개체인지. 화면이 링크를 걸지 말지 판단한다. */
+        boolean assignedOutside
 ) {
     public static ItemUnitResponse from(ItemUnit unit) {
         return new ItemUnitResponse(
@@ -20,6 +22,7 @@ public record ItemUnitResponse(
                 unit.getStatus().name(),
                 unit.getStatus().getLabel(),
                 unit.getStatus().isOnHand(),
-                unit.getOrder() == null ? null : unit.getOrder().getOrderNumber());
+                unit.assignedOrderNumber(),
+                unit.getOrder() == null && unit.getExternalReference() != null);
     }
 }

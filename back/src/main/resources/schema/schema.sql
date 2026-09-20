@@ -118,6 +118,9 @@ CREATE TABLE `item_unit` (
     `status` VARCHAR(30) NOT NULL DEFAULT 'NORMAL'
      COMMENT '상태(정상/예약/판매완료)',
     `order_id` BIGINT NULL COMMENT '배정된 주문 아이디',
+    -- 기준시각에 이미 배정돼 있던 개체의 주문번호. orders 에 없는 주문이라 FK 로 걸 수 없다.
+    -- 상태가 '주문 배정됨' 인데 배정 주문이 비어 보이면 담당자가 읽을 수 없어서 남긴다.
+    `external_reference` VARCHAR(50) NULL COMMENT '앱 밖에서 배정한 주문번호',
     PRIMARY KEY (`id`),
     UNIQUE KEY `UK_ITEM_UNIT_SERIAL_NUMBER`
      (`serial_number`)
@@ -143,6 +146,7 @@ CREATE TABLE `stock_schedule` (
     `received_quantity` INT NOT NULL DEFAULT 0 COMMENT '입고 수량',
 
     `available_at` DATETIME NULL COMMENT '사용 가능 예정일',
+    `inspected_quantity` INT NOT NULL DEFAULT 0 COMMENT '검사 통과 수량. 이만큼만 입고할 수 있다',
     `inspect_status` VARCHAR(30) NOT NULL COMMENT '검사 상태',
     `is_confirmed` BOOLEAN NOT NULL DEFAULT FALSE COMMENT '확정 여부',
     `order_id` BIGINT NULL COMMENT '이 문서를 만들게 한 주문 아이디',
@@ -188,6 +192,10 @@ CREATE TABLE `order_detail` (
 `order_id` BIGINT NOT NULL COMMENT '주문 아이디',
 `item_id` BIGINT NULL COMMENT '품목 아이디',
 `item_set_id` BIGINT NULL COMMENT '세트 아이디',
+-- 주문서에 적혀 있었지만 품목으로 등록되지 않은 코드. item_id 가 NULL 인 라인의 원본 값이다.
+-- 이 값을 버리면 담당자에게 "등록되지 않은 품목이 있다" 까지만 말할 수 있고
+-- 어느 코드를 등록해야 하는지 알려 줄 수 없다. (요구사항 3-6)
+`raw_item_code` VARCHAR(50) NULL COMMENT '미등록 품목의 원본 코드',
 `sequence` INT NOT NULL COMMENT '품목 순서',
 `order_quantity` INT NOT NULL COMMENT '주문 수량',
 `status` VARCHAR(30) NOT NULL DEFAULT 'NORMAL' COMMENT '품목 상태(정상/취소)',
@@ -205,10 +213,16 @@ UNIQUE KEY `UK_ORDER_DETAIL_SEQUENCE`
 -- 한 주문이 특정 재고에서 몇 개를 잡아두었는지 기록한다.
 -- stock.booked_quantity 의 내역이며, 출고할 때 얼마를 되돌릴지 알기 위해 필요하다.
 -- (order_id, item_id) 를 UNIQUE 로 묶어 같은 예약 요청이 두 번 반영되지 않게 한다.
+--
+-- order_id 가 NULL 인 행은 기준시각에 이미 잡혀 있던 예약이다. 엑셀 04_재고현황 의
+-- '기존예약주문번호'(ORD-PRE-*)는 이 앱이 모르는 주문이라 orders 행을 만들 수 없지만,
+-- 그렇다고 버리면 "이 예약수량을 누가 잡고 있는지" 를 화면에서 답할 수 없다.
+-- 그래서 보유자를 external_reference 에 문자열로 남긴다.
 -- =========================================================
 CREATE TABLE `order_reservation` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '아이디',
-    `order_id` BIGINT NOT NULL COMMENT '주문 아이디',
+    `order_id` BIGINT NULL COMMENT '주문 아이디. NULL 이면 기준시각 이전 예약',
+    `external_reference` VARCHAR(50) NULL COMMENT '앱 밖에서 잡은 예약의 주문번호',
     `item_id` BIGINT NOT NULL COMMENT '품목 아이디',
     `stock_id` BIGINT NOT NULL COMMENT '재고 아이디',
     `quantity` INT NOT NULL COMMENT '예약 수량',

@@ -23,6 +23,7 @@ export function ScheduleDetailPanel({ code }: { code: string | null }) {
   const { data, isLoading, error } = useSchedule(code);
   const { run, pending } = useCommand();
   const [quantity, setQuantity] = useState<number | null>(null);
+  const [passed, setPassed] = useState<number | null>(null);
 
   if (!code) return <PanelMessage>목록에서 문서를 선택하세요.</PanelMessage>;
   if (error) return <PanelMessage tone="error">문서를 불러오지 못했습니다.</PanelMessage>;
@@ -34,11 +35,14 @@ export function ScheduleDetailPanel({ code }: { code: string | null }) {
   const inspected = s.inspectStatus === "INSPECTED";
   const rejected = s.inspectStatus === "REJECTED";
 
-  const qty = Math.min(Math.max(quantity ?? remaining, 0), remaining);
+  // 생산의뢰는 검사를 통과한 수량까지만 들어온다. 남은 계획수량이 아니라 이 값이 상한이다.
+  const receivable = s.receivableQuantity;
+  const qty = Math.min(Math.max(quantity ?? receivable, 0), receivable);
   const percent = pct(s.receivedQuantity, s.planQuantity);
+  // 검사 입력 기본값은 계획수량 전량. 담당자가 합격분만 줄여 넣는다.
+  const passedQty = Math.min(Math.max(passed ?? s.planQuantity, 0), s.planQuantity);
 
-  // 생산의뢰는 검사를 통과해야 입고할 수 있다.
-  const canReceive = s.warehouseActive && s.confirmed && remaining > 0 && qty > 0 && (!isProduction || inspected);
+  const canReceive = s.warehouseActive && s.confirmed && receivable > 0 && qty > 0;
 
   const hint = !s.confirmed
     ? "미확정 문서는 준비 판단에 쓰이지 않고 입고도 할 수 없습니다. 먼저 발주를 확정하세요."
@@ -46,7 +50,11 @@ export function ScheduleDetailPanel({ code }: { code: string | null }) {
       ? "남은 수량이 없습니다. 같은 요청을 반복해도 현재고는 변하지 않습니다."
       : isProduction && !inspected
         ? "생산의뢰는 품질검사를 통과한 뒤에야 입고할 수 있습니다. 불합격 물량은 현재고가 되지 않습니다."
-        : "입고하면 현재고가 늘고, 이 문서를 기다리던 주문이 곧바로 준비 상태가 갱신됩니다. 계획 수량 이내로 입고해 주세요.";
+        : isProduction && receivable <= 0
+          ? `검사를 통과한 ${s.inspectedQuantity}개는 모두 입고됐습니다. 남은 ${remaining}개는 불합격분이라 현재고가 되지 않습니다.`
+          : isProduction && receivable < remaining
+            ? `검사를 통과한 ${s.inspectedQuantity}개까지만 입고할 수 있습니다. 나머지 ${remaining - receivable}개는 불합격분입니다.`
+            : "입고하면 현재고가 늘고, 이 문서를 기다리던 주문이 곧바로 준비 상태가 갱신됩니다. 계획 수량 이내로 입고해 주세요.";
 
   // 왜 판정에 반영되지 않는지 화면에서 바로 짚어 준다.
   const blockReason = !s.confirmed
@@ -124,37 +132,48 @@ export function ScheduleDetailPanel({ code }: { code: string | null }) {
         <SectionTitle>입고 처리</SectionTitle>
 
         {isProduction && (
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <span className="w-[52px] flex-none text-xs font-semibold text-ink-faint">품질검사</span>
-            {(
-              [
-                { label: "통과", passed: true, on: inspected, tone: GREEN },
-                { label: "불합격", passed: false, on: rejected, tone: ORANGE },
-              ] as const
-            ).map((b) => (
-              <button
-                key={b.label}
-                type="button"
-                aria-pressed={b.on}
-                disabled={pending || remaining <= 0}
+          <div className="mb-3 rounded-lg border border-line bg-raised p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex-none text-xs font-semibold text-ink-faint">품질검사</span>
+              <span className="text-xs text-ink-muted">
+                계획 {s.planQuantity}개 중 통과 수량
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={s.planQuantity}
+                value={passedQty}
+                disabled={pending}
+                onChange={(e) => setPassed(Number(e.target.value))}
+                className="num h-8 w-16 rounded-md border border-line bg-surface px-2 text-center text-sm"
+                aria-label="검사 통과 수량"
+              />
+              <Button
+                size="sm"
+                variant={passedQty > 0 ? "primary" : "default"}
+                disabled={pending}
                 onClick={() =>
                   run(
-                    () => api.schedules.inspect(s.code, b.passed),
-                    b.passed
-                      ? `${s.code} 검사 통과 — 이제 입고할 수 있습니다.`
-                      : `${s.code} 검사 불합격 — 통과 전까지 입고할 수 없습니다.`,
+                    () => api.schedules.inspect(s.code, passedQty),
+                    passedQty === 0
+                      ? `${s.code} 전량 불합격 — 이 물량은 현재고가 되지 않습니다.`
+                      : passedQty < s.planQuantity
+                        ? `${s.code} ${passedQty}개 합격 — 나머지 ${s.planQuantity - passedQty}개는 입고되지 않습니다.`
+                        : `${s.code} 전량 합격 — 이제 입고할 수 있습니다.`,
                   )
                 }
-                className="rounded-full border px-3.5 py-1.5 text-xs font-semibold enabled:cursor-pointer disabled:opacity-50"
-                style={{
-                  borderColor: b.on ? b.tone[0] : "var(--color-line)",
-                  background: b.on ? b.tone[1] : "var(--color-surface)",
-                  color: b.on ? b.tone[0] : "var(--color-ink-faint)",
-                }}
               >
-                {b.label}
-              </button>
-            ))}
+                검사 결과 기록
+              </Button>
+              {inspected && (
+                <Badge tone={GREEN}>통과 {s.inspectedQuantity}개</Badge>
+              )}
+              {rejected && <Badge tone={ORANGE}>전량 불합격</Badge>}
+            </div>
+            <Hint>
+              합격 수량만 입고할 수 있습니다. 0 을 넣으면 전량 불합격이고, 그 물량을 기다리던
+              주문은 재고 부족으로 돌아가 발주 대상이 됩니다.
+            </Hint>
           </div>
         )}
 
@@ -200,10 +219,10 @@ export function ScheduleDetailPanel({ code }: { code: string | null }) {
 
           <Button
             size="sm"
-            disabled={remaining <= 0 || qty === remaining}
-            onClick={() => setQuantity(remaining)}
+            disabled={receivable <= 0 || qty === receivable}
+            onClick={() => setQuantity(receivable)}
           >
-            남은 전량 {remaining}
+            입고 가능 전량 {receivable}
           </Button>
 
           <Button
@@ -216,7 +235,7 @@ export function ScheduleDetailPanel({ code }: { code: string | null }) {
               )
             }
           >
-            {remaining > 0 ? `${qty} 입고 처리` : "입고 완료"}
+            {receivable > 0 ? `${qty} 입고 처리` : "입고 완료"}
           </Button>
         </div>
 

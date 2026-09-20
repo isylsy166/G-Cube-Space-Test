@@ -126,15 +126,20 @@ export function SerialBoard({ items }: { items: ItemSummary[] }) {
                         </Badge>
                       </div>
                       <div className="num truncate text-xs">
-                        {u.assignedOrderNumber ? (
+                        {!u.assignedOrderNumber ? (
+                          <span className="text-ink-ghost">미배정</span>
+                        ) : u.assignedOutside ? (
+                          // 앱이 모르는 주문이라 넘어갈 곳이 없다. 번호만 보여 준다.
+                          <span className="text-ink-muted" title="기준시각 이전에 배정된 주문입니다">
+                            {u.assignedOrderNumber}
+                          </span>
+                        ) : (
                           <Link
                             href={`/orders?no=${u.assignedOrderNumber}`}
                             className="font-semibold text-accent hover:underline"
                           >
                             {u.assignedOrderNumber}
                           </Link>
-                        ) : (
-                          <span className="text-ink-ghost">미배정</span>
                         )}
                       </div>
                     </div>

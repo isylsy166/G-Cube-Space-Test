@@ -12,17 +12,21 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.test.context.jdbc.Sql;
+import java.time.LocalDate;
 import java.util.List;
+import test.gcube.dto.BulkScheduleCreateRequest;
 import test.gcube.dto.InspectionRequest;
 import test.gcube.dto.PickRequest;
 import test.gcube.dto.ReceiptRequest;
 import test.gcube.dto.ScheduleCreateRequest;
+import test.gcube.support.MySqlTestContainer;
 
 /**
  * 예약 → 피킹 → 출고, 발주 → 검사 → 입고. 요구사항 5의 시나리오 6~8 과
@@ -31,6 +35,7 @@ import test.gcube.dto.ScheduleCreateRequest;
  * <p>각 테스트는 트랜잭션 안에서 돌고 끝나면 되돌아가므로 기준 데이터를 더럽히지 않는다.
  */
 @SpringBootTest
+@Import(MySqlTestContainer.class)
 @AutoConfigureMockMvc
 @Transactional
 // 테스트마다 기준 데이터를 다시 적재한다. 개발용 MySQL 은 실행 중인 앱과
@@ -282,7 +287,7 @@ class CommandFlowTest {
         String body = mvc.perform(post("/api/orders/{no}/purchase-orders", "ORD202607200024")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(
-                                new ScheduleCreateRequest("FRM-LOW-Q", null, null))))
+                                new ScheduleCreateRequest("FRM-LOW-Q", null, null, null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.typeLabel").value("구매"))
                 .andExpect(jsonPath("$.planQuantity").value(2))
@@ -312,7 +317,7 @@ class CommandFlowTest {
         String body = mvc.perform(post("/api/orders/{no}/purchase-orders", "ORD202607200020")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(
-                                new ScheduleCreateRequest("MAT-E5-SS", null, null))))
+                                new ScheduleCreateRequest("MAT-E5-SS", null, null, null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.typeLabel").value("생산"))
                 .andExpect(jsonPath("$.planQuantity").value(1))
@@ -329,7 +334,7 @@ class CommandFlowTest {
         // 검사 통과 후에는 입고된다
         mvc.perform(post("/api/stock-schedules/{code}/inspection", code)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(new InspectionRequest(true))))
+                        .content(json.writeValueAsString(new InspectionRequest(null, true))))
                 .andExpect(jsonPath("$.inspectStatusLabel").value("검사 완료"));
         mvc.perform(post("/api/stock-schedules/{code}/receipt", code)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -349,7 +354,7 @@ class CommandFlowTest {
 
         mvc.perform(post("/api/stock-schedules/{code}/inspection", "MO-20260721-Z10")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(new InspectionRequest(false))))
+                        .content(json.writeValueAsString(new InspectionRequest(null, false))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.inspectStatusLabel").value("검사 불합격"))
                 // 불합격 물량은 앞으로 들어올 수량이 아니므로 판정에서 빠진다
@@ -363,7 +368,7 @@ class CommandFlowTest {
         // 재검사를 통과하면 다시 입고할 수 있다
         mvc.perform(post("/api/stock-schedules/{code}/inspection", "MO-20260721-Z10")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(new InspectionRequest(true))))
+                        .content(json.writeValueAsString(new InspectionRequest(null, true))))
                 .andExpect(jsonPath("$.inspectStatusLabel").value("검사 완료"))
                 .andExpect(jsonPath("$.usableForPlanning").value(true));
         mvc.perform(post("/api/stock-schedules/{code}/receipt", "MO-20260721-Z10")
@@ -382,7 +387,7 @@ class CommandFlowTest {
 
         mvc.perform(post("/api/stock-schedules/{code}/inspection", "MO-20260721-Z10")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(new InspectionRequest(false))))
+                        .content(json.writeValueAsString(new InspectionRequest(null, false))))
                 .andExpect(status().isOk());
 
         // 들어오지 않을 물량이므로 더는 기다릴 대상이 아니다. 발주가 필요한 주문이 된다.
@@ -401,7 +406,7 @@ class CommandFlowTest {
         String body = mvc.perform(post("/api/orders/{no}/purchase-orders", "ORD202607200024")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(
-                                new ScheduleCreateRequest("FRM-LOW-Q", null, null))))
+                                new ScheduleCreateRequest("FRM-LOW-Q", null, null, null))))
                 .andReturn().getResponse().getContentAsString();
         String code = json.readTree(body).get("code").asText();
 
@@ -431,7 +436,7 @@ class CommandFlowTest {
         mvc.perform(post("/api/orders/{no}/purchase-orders", "ORD202607200024")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(
-                                new ScheduleCreateRequest("SVC-INSTALL", 1, null))))
+                                new ScheduleCreateRequest("SVC-INSTALL", 1, null, null))))
                 .andExpect(status().isConflict());
     }
 
@@ -441,7 +446,7 @@ class CommandFlowTest {
         mvc.perform(post("/api/orders/{no}/purchase-orders", "ORD202607200010")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(
-                                new ScheduleCreateRequest("MAT-Z10-Q", 1, null))))
+                                new ScheduleCreateRequest("MAT-Z10-Q", 1, null, null))))
                 .andExpect(status().isConflict());
     }
 
@@ -453,7 +458,7 @@ class CommandFlowTest {
         mvc.perform(post("/api/orders/{no}/purchase-orders", "ORD202607200026")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(
-                                new ScheduleCreateRequest("CVR-WP-Q", 5, null))))
+                                new ScheduleCreateRequest("CVR-WP-Q", 5, null, null))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value(
                         containsString("확인이 필요한 주문은 발주 대상이 아닙니다")));
@@ -465,6 +470,125 @@ class CommandFlowTest {
     }
 
     // ---------- 시나리오 8 : 입고 반복과 계획수량 초과 ----------
+
+    // ---------- 부분 합격 검사 ----------
+
+    @Test
+    @DisplayName("검사 통과 수량만큼만 입고할 수 있고, 나머지는 거부된다")
+    void partialInspectionLimitsReceipt() throws Exception {
+        // MO-20260721-Z10 : 계획 2, 검사 대기. 1개만 합격으로 기록한다.
+        mvc.perform(post("/api/stock-schedules/{code}/inspection", "MO-20260721-Z10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new InspectionRequest(1, null))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inspectedQuantity").value(1))
+                .andExpect(jsonPath("$.receivableQuantity").value(1))
+                .andExpect(jsonPath("$.inspectStatusLabel").value("검사 완료"));
+
+        // 계획수량 안이지만 통과하지 않은 2개는 들어올 수 없다
+        mvc.perform(post("/api/stock-schedules/{code}/receipt", "MO-20260721-Z10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new ReceiptRequest(2))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(containsString("검사를 통과한 1 개")));
+
+        // 통과분 1개는 들어온다
+        mvc.perform(post("/api/stock-schedules/{code}/receipt", "MO-20260721-Z10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new ReceiptRequest(1))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.receivedQuantity").value(1))
+                .andExpect(jsonPath("$.receivableQuantity").value(0));
+
+        // 통과분을 다 쓰면 남은 계획수량이 있어도 더 못 넣는다
+        mvc.perform(post("/api/stock-schedules/{code}/receipt", "MO-20260721-Z10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new ReceiptRequest(1))))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("부분 합격이면 불합격분은 준비 판단에서 빠진다")
+    void partialInspectionShrinksPlanningQuantity() throws Exception {
+        // ORD202607200007 은 MAT-Z10-Q 1개를 MO-20260721-Z10(계획 2) 으로 기다린다
+        mvc.perform(get("/api/orders/{no}", "ORD202607200007"))
+                .andExpect(jsonPath("$.readiness.statusLabel").value("품질검사 대기"));
+
+        // 전량 불합격이면 기다릴 물량이 사라져 재고 부족이 된다
+        mvc.perform(post("/api/stock-schedules/{code}/inspection", "MO-20260721-Z10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new InspectionRequest(0, null))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usableQuantity").value(0));
+
+        mvc.perform(get("/api/orders/{no}", "ORD202607200007"))
+                .andExpect(jsonPath("$.readiness.statusLabel").value("재고 부족"));
+    }
+
+    @Test
+    @DisplayName("이미 입고된 수량보다 낮게 검사 통과 수량을 낮출 수 없다")
+    void inspectionCannotDropBelowReceived() throws Exception {
+        mvc.perform(post("/api/stock-schedules/{code}/inspection", "MO-20260721-Z10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new InspectionRequest(2, null))));
+        mvc.perform(post("/api/stock-schedules/{code}/receipt", "MO-20260721-Z10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new ReceiptRequest(2))))
+                .andExpect(status().isOk());
+
+        // 입고를 취소하는 기능이 아니다
+        mvc.perform(post("/api/stock-schedules/{code}/inspection", "MO-20260721-Z10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new InspectionRequest(1, null))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(containsString("이미 2 개가 입고되어")));
+    }
+
+    // ---------- 묶음 발주 (요구사항 4-5) ----------
+
+    @Test
+    @DisplayName("같은 품목을 기다리는 여러 주문의 부족분을 한 문서로 묶어 발주한다")
+    void bulkOrderMergesShortages() throws Exception {
+        // WH-HQ 의 MAT-V3-Q 를 ORD202607200015 와 ORD202607200025 가 각각 1개씩 부족해한다.
+        // 따로 발주하면 같은 공급처에 1개짜리 생산의뢰가 두 건 나간다.
+        mvc.perform(post("/api/stock-schedules")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new BulkScheduleCreateRequest(
+                                List.of("ORD202607200015", "ORD202607200025"),
+                                "MAT-V3-Q", null, null, null))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itemCode").value("MAT-V3-Q"))
+                .andExpect(jsonPath("$.warehouseCode").value("WH-HQ"))
+                // 생산품이므로 생산의뢰가 되고, 두 주문의 부족분을 합친 2개다
+                .andExpect(jsonPath("$.typeLabel").value("생산"))
+                .andExpect(jsonPath("$.planQuantity").value(2))
+                // 대표 주문은 배송일이 가장 빠른 주문이다
+                .andExpect(jsonPath("$.code").value(containsString("MO-")));
+    }
+
+    @Test
+    @DisplayName("출고창고가 다른 주문끼리는 묶어 발주할 수 없다")
+    void bulkOrderRejectsMixedWarehouses() throws Exception {
+        mvc.perform(post("/api/stock-schedules")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new BulkScheduleCreateRequest(
+                                List.of("ORD202607200012", "ORD202607200015"),
+                                "PIL-ZERO", 2, null, null))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(containsString("출고창고가 서로 달라")));
+    }
+
+    @Test
+    @DisplayName("발주할 때 공급처와 사용 가능 예정일을 직접 고를 수 있다")
+    void scheduleCanOverrideSupplierAndDate() throws Exception {
+        mvc.perform(post("/api/orders/{no}/purchase-orders", "ORD202607200012")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new ScheduleCreateRequest(
+                                "PIL-ZERO", 2, "SUP-TEX", LocalDate.of(2026, 7, 22)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supplierCode").value("SUP-TEX"))
+                .andExpect(jsonPath("$.availableAt").value(containsString("2026-07-22")));
+    }
 
     @Test
     @DisplayName("시나리오 8 - 같은 멱등 키로 입고를 반복해도 한 번만 반영된다")
@@ -549,7 +673,7 @@ class CommandFlowTest {
         String body = mvc.perform(post("/api/orders/{no}/purchase-orders", "ORD202607200024")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(
-                                new ScheduleCreateRequest("FRM-LOW-Q", null, null))))
+                                new ScheduleCreateRequest("FRM-LOW-Q", null, null, null))))
                 .andReturn().getResponse().getContentAsString();
         String code = json.readTree(body).get("code").asText();
 

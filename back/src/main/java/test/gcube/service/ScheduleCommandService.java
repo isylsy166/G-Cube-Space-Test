@@ -2,10 +2,16 @@ package test.gcube.service;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import test.gcube.dto.BulkScheduleCreateRequest;
 import test.gcube.dto.InspectionRequest;
 import test.gcube.dto.OrderReadinessResponse;
 import test.gcube.dto.ReceiptRequest;
@@ -125,8 +131,11 @@ public class ScheduleCommandService {
                 .status(ScheduleStatus.CONFIRMED)
                 .planQuantity(quantity)
                 .receivedQuantity(0)
-                // 사용 가능 예정일 기본값은 공급처 리드타임으로 제안한다
-                .availableAt(LocalDate.now(clock).plusDays(supplier.getLeadTimeDays()).atStartOfDay())
+                // 담당자가 날짜를 지정하면 그대로, 아니면 공급처 리드타임으로 제안한다
+                .availableAt(request.availableAt() != null
+                        ? request.availableAt().atStartOfDay()
+                        : LocalDate.now(clock).plusDays(supplier.getLeadTimeDays()).atStartOfDay())
+                .inspectedQuantity(0)
                 .inspectStatus(type == ScheduleType.PRODUCTION
                         ? InspectStatus.BEFORE_INSPECTION
                         : InspectStatus.NOT_APPLICABLE)
@@ -137,13 +146,84 @@ public class ScheduleCommandService {
         return stockScheduleRepository.save(schedule).getCode();
     }
 
-    /** 검사 결과 기록. 통과해야 입고할 수 있다. */
+    /**
+     * 여러 주문의 부족분을 한 문서로 묶어 발주한다. (요구사항 4-5 선택 사항)
+     *
+     * <p>같은 품목을 여러 주문이 조금씩 부족해하는 상황에서 문서를 하나로 합친다.
+     * 입고창고는 주문의 출고창고여야 하므로 창고가 다른 주문끼리는 묶을 수 없고,
+     * 확인이 필요한 주문은 단건 발주와 똑같이 거절된다.
+     *
+     * <p>문서는 대표 주문(가장 배송일이 빠른 주문) 하나에 연결한다. 나머지 주문도 같은
+     * 품목을 기다리고 있으므로, 입고되면 판정이 다시 돌아 함께 풀린다.
+     */
+    public StockScheduleResponse createFromOrders(BulkScheduleCreateRequest request,
+                                                  String idempotencyKey) {
+        String code = idempotencyGuard.runOnce(idempotencyKey, "SCHEDULE_CREATE_BULK",
+                () -> createBulk(request));
+        return StockScheduleResponse.from(stockScheduleRepository.findByCodeWithRefs(code)
+                .orElseThrow());
+    }
+
+    private String createBulk(BulkScheduleCreateRequest request) {
+        if (request.orderNumbers() == null || request.orderNumbers().isEmpty()) {
+            throw new IllegalStateException("묶을 주문을 한 건 이상 골라 주세요.");
+        }
+        List<String> orderNumbers = request.orderNumbers().stream().distinct().toList();
+
+        // 판정은 전역 배분이라 한 번만 돌리고 모든 주문이 그 결과를 함께 본다.
+        Map<String, OrderReadinessResponse> plans = readinessPlanner.planAll();
+
+        Set<String> warehouses = new LinkedHashSet<>();
+        int shortage = 0;
+        for (String orderNumber : orderNumbers) {
+            OrderReadinessResponse readiness = plans.get(orderNumber);
+            if (readiness == null) {
+                throw new IllegalStateException(
+                        "%s 는 준비 대상이 아니라 묶을 수 없습니다.".formatted(orderNumber));
+            }
+            if (ReadinessStatus.REVIEW_REQUIRED.name().equals(readiness.status())) {
+                throw new IllegalStateException("확인이 필요한 주문은 발주 대상이 아닙니다: "
+                        + orderNumber);
+            }
+            warehouses.add(readiness.warehouseCode());
+            shortage += shortageOf(readiness, request.itemCode());
+        }
+
+        if (warehouses.size() > 1) {
+            // 한 문서는 한 창고로만 들어온다. 창고가 다르면 합칠 수 없다. (요구사항 3-5)
+            throw new IllegalStateException(
+                    "출고창고가 서로 달라 묶을 수 없습니다: %s. 창고별로 나눠 발주해 주세요."
+                            .formatted(String.join(", ", warehouses)));
+        }
+
+        int quantity = request.quantity() != null ? request.quantity() : shortage;
+        if (quantity <= 0) {
+            throw new IllegalStateException(
+                    "%s 은 고른 주문에서 부족 수량이 없어 발주할 필요가 없습니다."
+                            .formatted(request.itemCode()));
+        }
+
+        // 대표 주문은 배송일이 가장 빠른 주문. 그 주문이 이 물량을 가장 먼저 기다린다.
+        String primary = orderNumbers.stream()
+                .min(Comparator.comparing(no -> plans.get(no).deliveryAt()))
+                .orElseThrow();
+
+        return create(primary, new ScheduleCreateRequest(
+                request.itemCode(), quantity, request.supplierCode(), request.availableAt()));
+    }
+
+    /**
+     * 검사 결과 기록. 통과한 수량만 입고할 수 있다.
+     *
+     * <p>전량 합격/불합격뿐 아니라 부분 합격을 기록할 수 있다. 통과 수량을 줄이면
+     * 그만큼 입고 가능 수량이 줄고, 그 물량을 기다리던 주문은 다시 판정된다.
+     */
     public StockScheduleResponse inspect(String code, InspectionRequest request) {
         StockSchedule schedule = findScheduleForUpdate(code);
         if (schedule.getType() != ScheduleType.PRODUCTION) {
             throw new IllegalStateException("구매발주는 품질검사 대상이 아닙니다.");
         }
-        schedule.inspect(request.passed());
+        schedule.inspect(request.resolvePassedQuantity(schedule.getPlanQuantity()));
         return StockScheduleResponse.from(schedule);
     }
 
@@ -210,6 +290,7 @@ public class ScheduleCommandService {
                     .serialNumber(serialNumber)
                     .location(null)
                     .status(ItemUnitStatus.NORMAL)
+                    .externalReference(null)
                     .build());
         }
     }

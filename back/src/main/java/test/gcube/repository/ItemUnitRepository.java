@@ -41,6 +41,10 @@ public interface ItemUnitRepository extends JpaRepository<ItemUnit, Long> {
             """)
     List<ItemUnit> findByOrderIdWithRefs(@Param("orderId") Long orderId);
 
+    /** 시리얼 개체가 한 개라도 배정된 주문. 목록에서 처리 단계를 보여 줄 때 쓴다. */
+    @Query("select distinct u.order.id from ItemUnit u where u.order is not null")
+    List<Long> findAssignedOrderIds();
+
     /**
      * 피킹 대상 후보. 같은 창고에 보관 중이고 아직 어느 주문에도 배정되지 않은 개체.
      * 두 주문이 같은 개체를 집어가지 않도록 행을 잠그고 읽는다.
@@ -51,6 +55,7 @@ public interface ItemUnitRepository extends JpaRepository<ItemUnit, Long> {
             where u.stock.id = :stockId
               and u.status = test.gcube.entity.enums.ItemUnitStatus.NORMAL
               and u.order is null
+              and u.externalReference is null
             order by u.serialNumber
             """)
     List<ItemUnit> findPickable(@Param("stockId") Long stockId);
@@ -66,6 +71,7 @@ public interface ItemUnitRepository extends JpaRepository<ItemUnit, Long> {
             where s.id = :stockId
               and u.status = test.gcube.entity.enums.ItemUnitStatus.NORMAL
               and u.order is null
+              and u.externalReference is null
             order by u.serialNumber
             """)
     List<ItemUnit> findSelectableWithRefs(@Param("stockId") Long stockId);

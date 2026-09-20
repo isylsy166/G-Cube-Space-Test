@@ -13,6 +13,7 @@ import test.gcube.dto.ItemDetailResponse;
 import test.gcube.dto.ItemSummaryResponse;
 import test.gcube.dto.ItemUnitResponse;
 import test.gcube.dto.OrderReadinessResponse;
+import test.gcube.dto.StockHolderResponse;
 import test.gcube.dto.StockLedgerResponse;
 import test.gcube.dto.StockScheduleResponse;
 import test.gcube.dto.WaitingOrderResponse;
@@ -22,6 +23,7 @@ import test.gcube.entity.Stock;
 import test.gcube.repository.ItemRepository;
 import test.gcube.repository.ItemUnitRepository;
 import test.gcube.repository.StockRepository;
+import test.gcube.repository.OrderReservationRepository;
 import test.gcube.repository.StockLedgerRepository;
 import test.gcube.repository.StockScheduleRepository;
 
@@ -36,6 +38,7 @@ public class ItemQueryService {
     private final ItemUnitRepository itemUnitRepository;
     private final StockScheduleRepository stockScheduleRepository;
     private final StockLedgerRepository stockLedgerRepository;
+    private final OrderReservationRepository orderReservationRepository;
     private final ReadinessPlanner readinessPlanner;
 
     public List<ItemSummaryResponse> findAll() {
@@ -62,6 +65,8 @@ public class ItemQueryService {
                                 .map(ItemUnitResponse::from).toList()
                         : List.of(),
                 waitingOrders(code),
+                orderReservationRepository.findActiveByItemIdWithRefs(item.getId()).stream()
+                        .map(StockHolderResponse::from).toList(),
                 stockScheduleRepository.findByItemIdWithRefs(item.getId()).stream()
                         .map(StockScheduleResponse::from).toList(),
                 stockLedgerRepository.findByItemIdWithRefs(item.getId()).stream()

@@ -19,10 +19,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 import test.gcube.dto.ReceiptRequest;
 import test.gcube.entity.OrderReservation;
+import test.gcube.entity.enums.ReservationStatus;
 import test.gcube.entity.enums.ItemUnitStatus;
 import test.gcube.repository.ItemRepository;
 import test.gcube.repository.ItemUnitRepository;
@@ -33,6 +35,7 @@ import test.gcube.repository.StockScheduleRepository;
 import test.gcube.repository.WarehouseRepository;
 import test.gcube.service.OrderCommandService;
 import test.gcube.service.ScheduleCommandService;
+import test.gcube.support.MySqlTestContainer;
 
 /**
  * 동시 요청에서 숫자가 어긋나지 않는지 확
@@ -41,6 +44,7 @@ import test.gcube.service.ScheduleCommandService;
  * 각 테스트 전후로 기준 데이터를 다시 적재한다.
  */
 @SpringBootTest
+@Import(MySqlTestContainer.class)
 class ConcurrencyTest {
 
     @Autowired DataSource dataSource;
@@ -105,9 +109,13 @@ class ConcurrencyTest {
                 () -> orderCommandService.reserve("ORD202607200027")));
 
         assertThat(result.successes()).isPositive();
-        // 성공한 예약이 몇 건이든, 예약수량은 실제로 남은 예약 행의 합과 맞아야 한다.
+        // 성공한 예약이 몇 건이든, 예약수량은 실제로 걸려 있는 예약 행의 합과 정확히 맞아야 한다.
+        // 기준시각 이전 예약도 행으로 남아 있으므로 before 를 더하지 않고 전체 합과 비교한다.
+        // 예약이 유실되면 booked 가 합보다 작아지고, 중복 반영되면 커진다.
         assertThat(bookedOf("WH-08", "PIL-ZERO"))
-                .isEqualTo(before + reservedQuantityOf("WH-08", "PIL-ZERO"));
+                .isEqualTo(reservedQuantityOf("WH-08", "PIL-ZERO"));
+        assertThat(bookedOf("WH-08", "PIL-ZERO"))
+                .isGreaterThan(before);
         assertThat(bookedOf("WH-08", "PIL-ZERO"))
                 .isLessThanOrEqualTo(quantityOf("WH-08", "PIL-ZERO"));
     }
@@ -240,12 +248,16 @@ class ConcurrencyTest {
                 .orElseThrow().getQuantity();
     }
 
-    /** 그 재고에 실제로 걸려 있는 예약 행 수량의 합. */
+    /**
+     * 그 재고에 걸려 있는 예약 행 수량의 합. 기준시각 이전 예약(order 가 없는 행)도 센다.
+     * {@code stock.booked_quantity} 는 항상 이 값과 같아야 한다.
+     */
     private int reservedQuantityOf(String warehouseCode, String itemCode) {
         Long stockId = stockRepository.findByWarehouseIdAndItemId(
                 idOfWarehouse(warehouseCode), idOfItem(itemCode)).orElseThrow().getId();
         return orderReservationRepository.findAll().stream()
                 .filter(r -> r.getStock().getId().equals(stockId))
+                .filter(r -> r.getStatus() == ReservationStatus.RESERVED)
                 .mapToInt(OrderReservation::getQuantity)
                 .sum();
     }

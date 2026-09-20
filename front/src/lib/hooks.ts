@@ -45,6 +45,10 @@ export const usePickableUnits = (orderNumber: string | null) =>
 
 export const useItems = () => useSWR(["items"], () => api.items.list());
 
+/** 발주 화면에서 공급처를 고를 때 쓴다. 거의 바뀌지 않아 한 번 받아 두고 재사용한다. */
+export const useSuppliers = () =>
+  useSWR(["suppliers"], () => api.suppliers.list(), { revalidateOnFocus: false });
+
 export const useItem = (code: string | null) =>
   useSWR(code ? ["item", code] : null, () => api.items.detail(code!));
 

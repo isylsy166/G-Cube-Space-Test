@@ -2,6 +2,7 @@ package test.gcube.service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -56,11 +57,17 @@ public class OrderQueryService {
                                               String warehouseCode) {
         Map<String, OrderReadinessResponse> plans = readinessPlanner.planAll();
 
+        // 처리 단계(예약·피킹)는 주문마다 상세를 부르지 않고 한 번에 모아 온다.
+        // 목록 한 줄을 그리려고 상세를 부르면 그 한 건이 전역 판정을 다시 돌린다.
+        Set<Long> reserved = Set.copyOf(orderReservationRepository.findReservedOrderIds());
+        Set<Long> picked = Set.copyOf(itemUnitRepository.findAssignedOrderIds());
+
         return ordersRepository.findAllWithWarehouse().stream()
                 .filter(o -> status == null || o.getOrderStatus() == status)
                 .filter(o -> warehouseCode == null
                         || warehouseCode.equals(o.getWarehouse().getCode()))
-                .map(o -> OrderSummaryResponse.of(o, plans.get(o.getOrderNumber())))
+                .map(o -> OrderSummaryResponse.of(o, plans.get(o.getOrderNumber()),
+                        reserved.contains(o.getId()), picked.contains(o.getId())))
                 .filter(o -> readiness == null || readiness.name().equals(o.readinessStatus()))
                 .toList();
     }

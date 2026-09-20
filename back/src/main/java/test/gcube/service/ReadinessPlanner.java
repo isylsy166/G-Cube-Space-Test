@@ -19,6 +19,7 @@ import test.gcube.entity.Orders;
 import test.gcube.entity.Stock;
 import test.gcube.entity.StockSchedule;
 import test.gcube.entity.enums.InspectStatus;
+import test.gcube.entity.enums.OrderLineStatus;
 import test.gcube.entity.enums.ReadinessStatus;
 import test.gcube.entity.enums.ScheduleType;
 import test.gcube.repository.OrderDetailRepository;
@@ -208,8 +209,16 @@ public class ReadinessPlanner {
             reasons.add("배송예정일이 없습니다. 일정 확인이 필요합니다.");
         }
         if (details.isEmpty()) {
-            reasons.add("주문 상세가 없습니다. 등록되지 않은 품목이 섞여 있었는지 확인이 필요합니다.");
+            reasons.add("주문 상세가 없습니다. 주문 내용을 확인해 주세요.");
         }
+        // 어느 코드가 문제인지 그대로 보여 준다. "등록되지 않은 품목이 있다" 까지만 말하면
+        // 담당자는 무엇을 등록해야 할지 알 수 없다. (요구사항 3-6)
+        details.stream()
+                .filter(OrderDetail::isUnregistered)
+                .filter(d -> d.getStatus() == OrderLineStatus.NORMAL)
+                .forEach(d -> reasons.add(
+                        "%d번 품목 '%s' 가 품목으로 등록되어 있지 않습니다. 품목 등록 후 다시 확인해 주세요."
+                                .formatted(d.getSequence(), d.getRawItemCode())));
         details.stream()
                 .filter(OrderDetail::isPreparable)
                 .filter(d -> d.getOrderQuantity() <= 0)
@@ -307,7 +316,9 @@ public class ReadinessPlanner {
                                         schedule.getItem().getId()),
                                 k -> new ArrayList<>())
                         .add(schedule);
-                pool.remaining.put(schedule.getId(), schedule.getRemainingQuantity());
+                // 남은 계획수량이 아니라 '실제로 들어올 수 있는 수량'을 담는다.
+                // 검사를 마친 생산의뢰는 불합격분이 빠진다.
+                pool.remaining.put(schedule.getId(), schedule.getUsableQuantity());
             }
             pool.schedules.values().forEach(list -> list.sort(
                     (a, b) -> a.getAvailableAt().compareTo(b.getAvailableAt())));

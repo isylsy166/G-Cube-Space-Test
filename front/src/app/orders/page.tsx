@@ -7,7 +7,7 @@ import { DemandRollup } from "./DemandRollup";
 import { ShortageBoard } from "./ShortageBoard";
 import type { FilterOption } from "@/components/FilterBar";
 import { OrderQuery } from "@/components/OrderQuery";
-import { useOrders, useOrderDetails } from "@/lib/hooks";
+import { useOrders } from "@/lib/hooks";
 import { BASE_DATE, ddayColor, ddayLabel, dateWithWeekday } from "@/lib/basetime";
 import { shiftDate } from "@/lib/fulfillment";
 import { READINESS_TONE } from "@/lib/tone";
@@ -67,9 +67,6 @@ function OrdersWorkspace() {
   const { data: orders, isLoading, error } = useOrders();
   const all = useMemo(() => orders ?? [], [orders]);
 
-  const detailNumbers = useMemo(() => all.filter((order) => order.preparationTarget).map((order) => order.orderNumber), [all]);
-  const { data: details, isLoading: detailsLoading, error: detailsError } = useOrderDetails(detailNumbers);
-  const detailMap = useMemo(() => new Map((details ?? []).map((detail) => [detail.order.orderNumber, detail])), [details]);
 
   const matches = (o: OrderSummary, skip?: "due" | "wh" | "readiness") => {
     const group = READINESS_GROUPS[readiness];
@@ -84,9 +81,9 @@ function OrdersWorkspace() {
   };
 
   const rows = useMemo(
-    () => all.filter((o) => matches(o) && (!unreserved || (o.preparationTarget && detailMap.has(o.orderNumber) && detailMap.get(o.orderNumber)!.reservations.length === 0))),
+    () => all.filter((o) => matches(o) && (!unreserved || (o.preparationTarget && !o.reserved))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [all, q, readiness, due, warehouse, unreserved, detailMap],
+    [all, q, readiness, due, warehouse, unreserved],
   );
 
   /** 품목 집계 화면은 준비상태로 좁히면 수요가 반 토막 나므로 그 축만 뺀 범위를 쓴다. */
@@ -229,7 +226,6 @@ function OrdersWorkspace() {
                 <span className="text-ink-faint">배송일·접수 순으로 배정 · 발주 마감 15:00</span>
                 <label className="flex cursor-pointer items-center gap-2 font-medium"><input type="checkbox" checked={unreserved} onChange={(event) => setParam("unreserved", event.target.checked ? "1" : "")} />미예약 주문만</label>
               </div>
-              {detailsError && <p role="alert" className="mb-2 text-xs text-bad">예약 상태와 상세 사유를 불러오지 못했습니다. 다시 조회해 주세요.</p>}
               <Card>
                 <div className="table-scroll">
                   <TableHead cols={COLS} minWidth={MIN_WIDTH}>
@@ -243,7 +239,7 @@ function OrdersWorkspace() {
                     <EmptyRow>
                       주문을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
                     </EmptyRow>
-                  ) : isLoading || (unreserved && detailsLoading) ? (
+                  ) : isLoading ? (
                     <EmptyRow>불러오는 중…</EmptyRow>
                   ) : rows.length === 0 ? (
                     <EmptyRow>조건에 맞는 주문이 없습니다. 조회 조건을 변경하거나 초기화해 주세요.</EmptyRow>
@@ -293,12 +289,14 @@ function OrdersWorkspace() {
                                     {o.readinessStatus.startsWith("WAIT_")
                                       ? `${shiftDate(o.deliveryAt, -1)}까지 입고 필요`
                                       : o.readinessStatus === "REVIEW_REQUIRED"
-                                        ? detailMap.get(o.orderNumber)?.readiness.reviewReasons.join(" · ") ?? "상세에서 사유 확인"
+                                        ? o.reviewReasons.join(" · ") || "상세에서 사유 확인"
                                         : o.readinessStatus === "SHORTAGE"
                                           ? "공급 일정과 필요 기한 비교"
-                                          : detailMap.get(o.orderNumber)?.reservations.length
-                                            ? detailMap.get(o.orderNumber)?.pickedUnits.length ? "출고 제품 배정됨" : "재고 예약됨"
-                                            : detailMap.has(o.orderNumber) ? "미예약 · 재고 예약 필요" : "예약 상태 확인 중"}
+                                          : o.picked
+                                            ? "출고 제품 배정됨"
+                                            : o.reserved
+                                              ? "재고 예약됨"
+                                              : "미예약 · 재고 예약 필요"}
                                   </span>
 
                                 </>

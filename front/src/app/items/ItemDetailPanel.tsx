@@ -111,6 +111,42 @@ export function ItemDetailPanel({ code }: { code: string | null }) {
             ))}
           </div>
         )}
+
+        {data.holders.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1.5 text-[11px] font-semibold text-ink-faint">
+              예약수량을 잡고 있는 주문
+            </p>
+            <ul className="flex flex-wrap gap-1.5">
+              {data.holders.map((h, i) => (
+                <li key={`${h.orderNumber}-${i}`}>
+                  {h.managedHere ? (
+                    <Link
+                      href={`/orders?no=${h.orderNumber}`}
+                      className="num inline-flex items-center gap-1 rounded-full border border-line bg-raised px-2.5 py-1 text-[11px] font-semibold text-accent hover:underline"
+                    >
+                      {h.orderNumber}
+                      <span className="text-ink-dim">
+                        {h.warehouseCode} · {h.quantity}개
+                      </span>
+                    </Link>
+                  ) : (
+                    // 기준시각 이전에 잡힌 예약. 앱에 주문이 없어 넘어갈 곳이 없다.
+                    <span
+                      className="num inline-flex items-center gap-1 rounded-full border border-dashed border-line bg-raised px-2.5 py-1 text-[11px] text-ink-muted"
+                      title="기준시각에 이미 잡혀 있던 예약입니다. 이 앱이 만든 주문이 아닙니다."
+                    >
+                      {h.orderNumber}
+                      <span className="text-ink-dim">
+                        {h.warehouseCode} · {h.quantity}개
+                      </span>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
 
       {item.serial && (
@@ -139,15 +175,20 @@ export function ItemDetailPanel({ code }: { code: string | null }) {
                     {u.statusLabel}
                   </Badge>
                   <span className="num w-[116px] shrink-0 text-right text-xs">
-                    {u.assignedOrderNumber ? (
+                    {!u.assignedOrderNumber ? (
+                      <span className="text-ink-ghost">미배정</span>
+                    ) : u.assignedOutside ? (
+                      // 앱이 모르는 주문이라 넘어갈 곳이 없다. 번호만 보여 준다.
+                      <span className="text-ink-muted" title="기준시각 이전에 배정된 주문입니다">
+                        {u.assignedOrderNumber}
+                      </span>
+                    ) : (
                       <Link
                         href={`/orders?no=${u.assignedOrderNumber}`}
                         className="font-semibold text-accent hover:underline"
                       >
                         {u.assignedOrderNumber}
                       </Link>
-                    ) : (
-                      <span className="text-ink-ghost">미배정</span>
                     )}
                   </span>
                 </li>

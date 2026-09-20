@@ -1,4 +1,5 @@
 import type {
+  BulkScheduleCreateRequest,
   ItemDetail,
   ItemSummary,
   OrderDetail,
@@ -9,6 +10,7 @@ import type {
   ScheduleDetail,
   ScheduleType,
   StockSchedule,
+  Supplier,
 } from "./types";
 
 /** 서버가 내려주는 업무 규칙 위반 사유를 그대로 들고 다니는 에러. */
@@ -125,6 +127,10 @@ export const api = {
       ),
   },
 
+  suppliers: {
+    list: () => request<Supplier[]>("/api/suppliers"),
+  },
+
   items: {
     list: () => request<ItemSummary[]>("/api/items"),
     detail: (code: string) => request<ItemDetail>(`/api/items/${encodeURIComponent(code)}`),
@@ -146,10 +152,29 @@ export const api = {
         method: "POST",
       }),
 
-    inspect: (code: string, passed: boolean) =>
+    /**
+     * 품질검사 결과. 통과 수량만큼만 입고할 수 있다.
+     * 전량 합격/불합격뿐 아니라 부분 합격을 기록한다.
+     */
+    inspect: (code: string, passedQuantity: number) =>
       request<StockSchedule>(`/api/stock-schedules/${encodeURIComponent(code)}/inspection`, {
         method: "POST",
-        body: JSON.stringify({ passed }),
+        body: JSON.stringify({ passedQuantity }),
+      }),
+
+    /** 여러 주문의 부족분을 한 문서로 묶어 발주한다. 같은 품목·같은 창고끼리만 묶인다. */
+    createBulk: (body: BulkScheduleCreateRequest) =>
+      request<StockSchedule>("/api/stock-schedules", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: {
+          "Idempotency-Key": idempotencyKey(
+            "po-bulk",
+            [...body.orderNumbers].sort().join("+"),
+            body.itemCode,
+            body.quantity ?? "auto",
+          ),
+        },
       }),
 
     /**

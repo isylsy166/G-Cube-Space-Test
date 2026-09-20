@@ -298,9 +298,16 @@ export function OrderDetailPanel({ orderNumber }: { orderNumber: string | null }
                       {l.name}
                       <span className="num ml-1.5 text-[11px] text-ink-dim">{l.code}</span>
                     </span>
-                    {(canceled || l.kind === "SET") && (
-                      <span className="rounded border border-line px-1.5 py-[1px] text-[10.5px] font-medium text-ink-faint">
-                        {canceled ? "취소" : "세트"}
+                    {(canceled || l.kind === "SET" || l.unregistered) && (
+                      <span
+                        className="rounded border px-1.5 py-[1px] text-[10.5px] font-medium"
+                        style={
+                          l.unregistered
+                            ? { borderColor: "var(--color-bad)", color: "var(--color-bad)" }
+                            : { borderColor: "var(--color-line)", color: "var(--color-ink-faint)" }
+                        }
+                      >
+                        {l.unregistered ? "미등록 품목" : canceled ? "취소" : "세트"}
                       </span>
                     )}
                     <span className="num w-7 text-right text-[13px] font-semibold">

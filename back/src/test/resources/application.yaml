@@ -1,0 +1,25 @@
+# 테스트는 Testcontainers 가 띄운 MySQL 을 쓴다. 접속 정보는 @ServiceConnection 이
+# 채우므로 여기에 url·username·password 를 적지 않는다. 개발용 DB 주소가 남아 있으면
+# 컨테이너 대신 그쪽을 건드릴 수 있어서, 실수를 막으려고 아예 비워 둔다.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Seoul
+    open-in-view: false
+  sql:
+    init:
+      mode: never
+
+app:
+  base-time: 2026-07-21T09:00:00
+
+logging:
+  level:
+    org.hibernate.SQL: warn
+    # 컨테이너 기동 로그가 테스트 출력을 덮지 않게 한다
+    org.testcontainers: warn
+    com.github.dockerjava: warn

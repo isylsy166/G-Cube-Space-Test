@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { useOrderDetails } from "@/lib/hooks";
 import { ddayColor, ddayLabel, dateWithWeekday } from "@/lib/basetime";
 import { ROSE } from "@/lib/tone";
 import { Callout, Card, CardHeader, EmptyRow } from "@/components/ui";
 import { ShortageAction } from "@/components/ShortageAction";
+import { BulkOrderAction } from "@/components/BulkOrderAction";
 import type { ItemType, OrderSummary } from "@/lib/types";
 
 type Blocked = {
@@ -35,20 +35,16 @@ type ItemGroup = {
  */
 export function ShortageBoard({ orders }: { orders: OrderSummary[] }) {
 
-  const targets = useMemo(
-    () =>
-      orders
-        .filter((o) => o.preparationTarget && o.readinessStatus === "SHORTAGE")
-        .map((o) => o.orderNumber),
+  // 목록 응답에 부족 품목까지 실려 오므로 상세를 다시 부르지 않는다.
+  const data = useMemo(
+    () => orders.filter((o) => o.preparationTarget && o.readinessStatus === "SHORTAGE"),
     [orders],
   );
-  const { data, isLoading, error } = useOrderDetails(targets);
 
   const groups = useMemo<ItemGroup[]>(() => {
-    if (!data) return [];
     const byItem = new Map<string, ItemGroup>();
     for (const d of data) {
-      for (const n of d.readiness.demands) {
+      for (const n of d.demands) {
         if (n.shortageQuantity <= 0) continue;
         const g = byItem.get(n.itemCode) ?? {
           itemCode: n.itemCode,
@@ -60,11 +56,11 @@ export function ShortageBoard({ orders }: { orders: OrderSummary[] }) {
         };
         g.totalShortage += n.shortageQuantity;
         g.blocked.push({
-          orderNumber: d.order.orderNumber,
-          deliveryAt: d.order.deliveryAt,
-          warehouseName: d.order.warehouseName,
-          warehouseCode: d.order.warehouseCode,
-          warehouseActive: d.order.warehouseActive,
+          orderNumber: d.orderNumber,
+          deliveryAt: d.deliveryAt,
+          warehouseName: d.warehouseName,
+          warehouseCode: d.warehouseCode,
+          warehouseActive: d.warehouseActive,
           shortage: n.shortageQuantity,
           waitingScheduleCodes: n.waitingScheduleCodes,
         });
@@ -94,11 +90,7 @@ export function ShortageBoard({ orders }: { orders: OrderSummary[] }) {
           }
         />
 
-        {error ? (
-          <EmptyRow>부족 품목을 계산하지 못했습니다. 잠시 후 다시 시도해 주세요.</EmptyRow>
-        ) : isLoading ? (
-          <EmptyRow>부족 품목을 계산하는 중…</EmptyRow>
-        ) : groups.length === 0 ? (
+        {groups.length === 0 ? (
           <EmptyRow>
             지금 조건에서 발주가 필요한 품목이 없습니다. 재고와 입고예정으로 모두 채워집니다.
           </EmptyRow>
@@ -122,6 +114,7 @@ export function ShortageBoard({ orders }: { orders: OrderSummary[] }) {
                   <span className="text-[11px] text-ink-faint">부족 수량</span>
                   <span className="num text-[17px] font-bold text-bad">{g.totalShortage}</span>
                 </span>
+                <BulkOrderAction group={g} />
               </div>
 
               <ul>

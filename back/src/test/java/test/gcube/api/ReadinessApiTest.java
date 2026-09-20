@@ -8,15 +8,18 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.context.jdbc.Sql;
+import test.gcube.support.MySqlTestContainer;
 
 /**
  * 준비 가능 여부 판정. 요구사항 5의 시나리오 1~5 를 확인한다.
  * 판정은 읽기만 하므로 데이터를 바꾸지 않는다.
  */
 @SpringBootTest
+@Import(MySqlTestContainer.class)
 @AutoConfigureMockMvc
 // 테스트마다 기준 데이터를 다시 적재한다. 개발용 MySQL 은 실행 중인 앱과
 // 공유하므로, 앞선 실행이나 브라우저가 남긴 상태에 기대지 않는다.
@@ -117,10 +120,14 @@ class ReadinessApiTest {
     @Test
     @DisplayName("시나리오 5 - 미등록 품목 주문과 잘못된 수량 주문도 확인 필요로 빠진다")
     void scenario5_unknownItemAndBadQuantity() throws Exception {
+        // 어느 코드가 문제인지 그대로 보여 준다. 담당자는 이 코드를 품목으로 등록해야 한다
         mvc.perform(get("/api/orders/{no}", "ORD202607200011"))
                 .andExpect(jsonPath("$.readiness.statusLabel").value("확인 필요"))
                 .andExpect(jsonPath("$.readiness.reviewReasons[0]")
-                        .value("주문 상세가 없습니다. 등록되지 않은 품목이 섞여 있었는지 확인이 필요합니다."));
+                        .value("1번 품목 'UNKNOWN-SKU' 가 품목으로 등록되어 있지 않습니다. 품목 등록 후 다시 확인해 주세요."))
+                // 원본 코드가 주문 라인에도 남아 있다
+                .andExpect(jsonPath("$.lines[0].unregistered").value(true))
+                .andExpect(jsonPath("$.lines[0].code").value("UNKNOWN-SKU"));
 
         mvc.perform(get("/api/orders/{no}", "ORD202607200026"))
                 .andExpect(jsonPath("$.readiness.statusLabel").value("확인 필요"))

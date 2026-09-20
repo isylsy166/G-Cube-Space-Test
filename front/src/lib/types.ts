@@ -73,6 +73,33 @@ export interface ItemUnit {
   statusLabel: string;
   onHand: boolean;
   assignedOrderNumber: string | null;
+  /** 앱 밖에서 잡힌 개체. 주문 상세로 넘어갈 수 없어 링크를 걸지 않는다. */
+  assignedOutside: boolean;
+}
+
+/** 이 재고의 예약수량을 누가 잡고 있는지. 기준시각 이전 예약도 포함한다. */
+export interface StockHolder {
+  orderNumber: string;
+  managedHere: boolean;
+  warehouseCode: string;
+  quantity: number;
+}
+
+/** 여러 주문의 부족분을 한 문서로 묶는 요청. (요구사항 4-5) */
+export interface BulkScheduleCreateRequest {
+  orderNumbers: string[];
+  itemCode: string;
+  quantity?: number;
+  supplierCode?: string;
+  availableAt?: string;
+}
+
+export interface Supplier {
+  code: string;
+  name: string;
+  type: string;
+  typeLabel: string;
+  leadTimeDays: number;
 }
 
 export interface WaitingOrder {
@@ -115,6 +142,12 @@ export interface StockSchedule {
   planQuantity: number;
   receivedQuantity: number;
   remainingQuantity: number;
+  /** 검사를 통과한 수량. 생산의뢰만 의미가 있다. */
+  inspectedQuantity: number;
+  /** 지금 입고할 수 있는 수량. 생산의뢰는 검사 통과분까지만이다. */
+  receivableQuantity: number;
+  /** 준비 판단이 세는 수량. 검사를 마친 생산의뢰는 불합격분이 빠진다. */
+  usableQuantity: number;
   availableAt: string;
   status: ScheduleStatus | null;
   statusLabel: string | null;
@@ -130,6 +163,7 @@ export interface ItemDetail {
   stocks: WarehouseStock[];
   units: ItemUnit[];
   waitingOrders: WaitingOrder[];
+  holders: StockHolder[];
   schedules: StockSchedule[];
   ledgers: StockLedger[];
 }
@@ -148,13 +182,15 @@ export interface SetComponent {
 
 export interface OrderLine {
   sequence: number;
-  kind: "SET" | "ITEM";
+  kind: "SET" | "ITEM" | "UNREGISTERED";
   code: string;
   name: string;
   orderQuantity: number;
   status: OrderLineStatus;
   statusLabel: string;
   components: SetComponent[];
+  /** 품목으로 등록되지 않은 라인. code 는 주문서에 적혀 있던 원본 코드다. */
+  unregistered: boolean;
 }
 
 export interface DemandAllocation {
@@ -196,9 +232,23 @@ export interface OrderSummary {
   preparationTarget: boolean;
   readinessStatus: ReadinessStatus | null;
   readinessStatusLabel: string | null;
+  /**
+   * 세트 전개 후 실제 준비 품목. 목록 응답이 이걸 함께 주므로 화면이
+   * 주문마다 상세를 다시 부르지 않는다. (상세 1건 = 전역 판정 1회)
+   */
+  demands: DemandAllocation[];
+  reviewReasons: string[];
+  /** 재고 예약을 마쳤는지 */
+  reserved: boolean;
+  /** 시리얼 개체를 배정했는지 */
+  picked: boolean;
 }
 
 export interface Reservation {
+  /** 이 수량을 잡고 있는 주문번호 */
+  holderOrderNumber: string;
+  /** 이 앱이 처리한 예약인지. false 면 기준시각 이전에 이미 잡혀 있던 예약이다. */
+  managedHere: boolean;
   itemCode: string;
   itemName: string;
   warehouseCode: string;
@@ -245,4 +295,6 @@ export interface ScheduleCreateRequest {
   quantity?: number;
   /** 생략하면 품목의 기본 공급처를 쓴다. */
   supplierCode?: string;
+  /** YYYY-MM-DD. 생략하면 `기준시각 + 공급처 리드타임`. */
+  availableAt?: string;
 }

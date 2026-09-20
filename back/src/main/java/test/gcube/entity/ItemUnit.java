@@ -61,19 +61,37 @@ public class ItemUnit {
     @JoinColumn(name = "order_id")
     private Orders order;
 
+    /**
+     * 앱 밖에서 이 개체를 잡은 주문번호. 기준시각에 이미 배정돼 있던 개체만 값이 있다.
+     *
+     * <p>상태가 '주문 배정됨' 인데 배정된 주문이 비어 보이면 담당자가 읽을 수 없어서 남긴다.
+     */
+    @Column(name = "external_reference", length = 50)
+    private String externalReference;
+
     @Builder
     public ItemUnit(Stock stock, String serialNumber, String location, ItemUnitStatus status,
-                    Orders order) {
+                    Orders order, String externalReference) {
         this.stock = stock;
         this.serialNumber = serialNumber;
         this.location = location;
         this.status = status;
         this.order = order;
+        this.externalReference = externalReference;
     }
 
-    /** 다른 주문에 배정되었거나 이미 출고된 개체는 다시 고를 수 없다. (요구사항 3-4) */
+    /**
+     * 다른 주문에 배정되었거나 이미 출고된 개체는 다시 고를 수 없다. (요구사항 3-4)
+     *
+     * <p>앱 밖에서 잡은 개체도 마찬가지다. order 는 비어 있지만 남의 것이다.
+     */
     public boolean isPickable() {
-        return status == ItemUnitStatus.NORMAL && order == null;
+        return status == ItemUnitStatus.NORMAL && order == null && externalReference == null;
+    }
+
+    /** 화면에 보여 줄 배정 주문번호. 앱 밖에서 잡은 것이면 그 번호를 준다. */
+    public String assignedOrderNumber() {
+        return order != null ? order.getOrderNumber() : externalReference;
     }
 
     /** 주문에 배정한다. */

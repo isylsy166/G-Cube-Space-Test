@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import test.gcube.dto.StockScheduleResponse;
 import test.gcube.entity.enums.ScheduleType;
+import test.gcube.dto.BulkScheduleCreateRequest;
 import test.gcube.dto.InspectionRequest;
 import test.gcube.dto.ReceiptRequest;
 import test.gcube.dto.ScheduleDetailResponse;
@@ -35,6 +36,17 @@ public class StockScheduleController {
             @RequestParam(required = false) String itemCode,
             @RequestParam(required = false) Boolean confirmed) {
         return stockScheduleQueryService.search(type, warehouseCode, itemCode, confirmed);
+    }
+
+    /**
+     * 여러 주문의 부족분을 한 문서로 묶어 발주한다. (요구사항 4-5 선택 사항)
+     * 같은 품목·같은 출고창고끼리만 묶을 수 있다.
+     */
+    @PostMapping
+    public StockScheduleResponse createBulk(
+            @RequestBody BulkScheduleCreateRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        return scheduleCommandService.createFromOrders(request, idempotencyKey);
     }
 
     /** 문서 상세. 어떤 주문 때문에 생겼는지와 입고 이력을 함께 준다. */

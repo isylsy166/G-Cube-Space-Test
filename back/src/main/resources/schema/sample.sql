@@ -161,35 +161,36 @@ INSERT INTO `stock` (`id`, `warehouse_id`, `item_id`, `quantity`, `booked_quanti
 -- 엑셀의 창고코드/품목코드는 stock_id 하나로 합쳤습니다.
 --
 -- '예약주문번호'는 order_id 로 반영하되, orders 에 없는 기존 예약 주문
--- (ORD-PRE-001 / ORD-PRE-004)은 NULL 로 둡니다. 그 예약 수량 자체는
--- stock.booked_quantity 에 이미 들어 있습니다.
+-- (ORD-PRE-001 / ORD-PRE-004)은 order_id 를 NULL 로 두고 external_reference 에
+-- 번호를 남깁니다. 개체 상태가 '주문 배정됨' 인데 배정된 주문이 비어 보이면
+-- 담당자가 읽을 수 없기 때문입니다.
 -- '입고일시'는 스키마에 자리가 없어 주석으로 남깁니다.
 -- =========================================================
-INSERT INTO `item_unit` (`id`, `stock_id`, `serial_number`, `location`, `status`, `order_id`) VALUES
-( 1,  1, 'UNIT-Z10-Q-0000',   'A-01-00', 'SOLD', 14),      -- 출고 완료 / ORD202607180014, 입고 2026-07-15 11:00
-( 2,  1, 'UNIT-Z10-Q-0001',   'A-01-01', 'NORMAL', NULL),    -- 입고 2026-07-18 16:00
-( 3,  1, 'UNIT-Z10-Q-0002',   'A-01-02', 'NORMAL', NULL),    -- 입고 2026-07-18 16:00
-( 4,  1, 'UNIT-Z10-Q-0003',   'A-01-03', 'RESERVED', NULL),  -- 주문 배정됨 / ORD-PRE-001, 입고 2026-07-17 15:30
-( 5,  2, 'UNIT-Z10-K-0001',   'A-04-01', 'NORMAL', NULL),    -- 입고 2026-07-19 10:00
-( 6,  2, 'UNIT-Z10-K-0002',   'A-04-02', 'NORMAL', NULL),    -- 입고 2026-07-19 10:00
-( 7,  3, 'UNIT-V3-Q-0001',    'A-02-01', 'NORMAL', NULL),    -- 입고 2026-07-19 17:00
-( 8,  4, 'UNIT-E5-SS-0001',   'A-05-01', 'NORMAL', NULL),    -- 입고 2026-07-20 09:30
-( 9,  4, 'UNIT-E5-SS-0002',   'A-05-02', 'RESERVED', NULL),  -- 주문 배정됨 / ORD-PRE-004, 입고 2026-07-20 09:30
-(10,  5, 'UNIT-DMN-Q-0001',   'F-03-01', 'NORMAL', NULL),    -- 입고 2026-07-20 14:00
-(11,  6, 'UNIT-DMN-K-0001',   'F-04-01', 'NORMAL', NULL),    -- 입고 2026-07-20 14:00
-(12,  6, 'UNIT-DMN-K-0002',   'F-04-02', 'NORMAL', NULL),    -- 입고 2026-07-20 14:00
-(13, 15, 'UNIT-V3-Q-0101',    'C-02-01', 'NORMAL', NULL),    -- 입고 2026-07-17 13:00
-(14, 15, 'UNIT-V3-Q-0102',    'C-02-02', 'NORMAL', NULL),    -- 입고 2026-07-17 13:00
-(15, 16, 'UNIT-LOW-Q-0101',   'C-05-01', 'NORMAL', NULL),    -- 입고 2026-07-16 15:00
-(16, 16, 'UNIT-LOW-Q-0102',   'C-05-02', 'NORMAL', NULL),    -- 입고 2026-07-16 15:00
-(17, 16, 'UNIT-LOW-Q-0103',   'C-05-03', 'NORMAL', NULL),    -- 입고 2026-07-16 15:00
-(18, 19, 'UNIT-Z10-LEG-0001', 'L-01-01', 'NORMAL', NULL),    -- 비활성 창고, 입고 2026-06-30 09:00
-(19, 19, 'UNIT-Z10-LEG-0002', 'L-01-02', 'NORMAL', NULL),    -- 비활성 창고, 입고 2026-06-30 09:00
-(20, 19, 'UNIT-Z10-LEG-0003', 'L-01-03', 'NORMAL', NULL),    -- 비활성 창고, 입고 2026-06-30 09:00
-(21, 19, 'UNIT-Z10-LEG-0004', 'L-01-04', 'NORMAL', NULL),    -- 비활성 창고, 입고 2026-06-30 09:00
-(22, 19, 'UNIT-Z10-LEG-0005', 'L-01-05', 'NORMAL', NULL),    -- 비활성 창고, 입고 2026-06-30 09:00
-(23, 20, 'UNIT-DMN-LEG-0001', 'L-03-01', 'NORMAL', NULL),    -- 비활성 창고, 입고 2026-06-30 09:00
-(24, 20, 'UNIT-DMN-LEG-0002', 'L-03-02', 'NORMAL', NULL);    -- 비활성 창고, 입고 2026-06-30 09:00
+INSERT INTO `item_unit` (`id`, `stock_id`, `serial_number`, `location`, `status`, `order_id`, `external_reference`) VALUES
+( 1,  1, 'UNIT-Z10-Q-0000',   'A-01-00', 'SOLD', 14, NULL),      -- 출고 완료 / ORD202607180014, 입고 2026-07-15 11:00
+( 2,  1, 'UNIT-Z10-Q-0001',   'A-01-01', 'NORMAL', NULL, NULL),    -- 입고 2026-07-18 16:00
+( 3,  1, 'UNIT-Z10-Q-0002',   'A-01-02', 'NORMAL', NULL, NULL),    -- 입고 2026-07-18 16:00
+( 4,  1, 'UNIT-Z10-Q-0003',   'A-01-03', 'RESERVED', NULL, 'ORD-PRE-001'),  -- 주문 배정됨 / ORD-PRE-001, 입고 2026-07-17 15:30
+( 5,  2, 'UNIT-Z10-K-0001',   'A-04-01', 'NORMAL', NULL, NULL),    -- 입고 2026-07-19 10:00
+( 6,  2, 'UNIT-Z10-K-0002',   'A-04-02', 'NORMAL', NULL, NULL),    -- 입고 2026-07-19 10:00
+( 7,  3, 'UNIT-V3-Q-0001',    'A-02-01', 'NORMAL', NULL, NULL),    -- 입고 2026-07-19 17:00
+( 8,  4, 'UNIT-E5-SS-0001',   'A-05-01', 'NORMAL', NULL, NULL),    -- 입고 2026-07-20 09:30
+( 9,  4, 'UNIT-E5-SS-0002',   'A-05-02', 'RESERVED', NULL, 'ORD-PRE-004'),  -- 주문 배정됨 / ORD-PRE-004, 입고 2026-07-20 09:30
+(10,  5, 'UNIT-DMN-Q-0001',   'F-03-01', 'NORMAL', NULL, NULL),    -- 입고 2026-07-20 14:00
+(11,  6, 'UNIT-DMN-K-0001',   'F-04-01', 'NORMAL', NULL, NULL),    -- 입고 2026-07-20 14:00
+(12,  6, 'UNIT-DMN-K-0002',   'F-04-02', 'NORMAL', NULL, NULL),    -- 입고 2026-07-20 14:00
+(13, 15, 'UNIT-V3-Q-0101',    'C-02-01', 'NORMAL', NULL, NULL),    -- 입고 2026-07-17 13:00
+(14, 15, 'UNIT-V3-Q-0102',    'C-02-02', 'NORMAL', NULL, NULL),    -- 입고 2026-07-17 13:00
+(15, 16, 'UNIT-LOW-Q-0101',   'C-05-01', 'NORMAL', NULL, NULL),    -- 입고 2026-07-16 15:00
+(16, 16, 'UNIT-LOW-Q-0102',   'C-05-02', 'NORMAL', NULL, NULL),    -- 입고 2026-07-16 15:00
+(17, 16, 'UNIT-LOW-Q-0103',   'C-05-03', 'NORMAL', NULL, NULL),    -- 입고 2026-07-16 15:00
+(18, 19, 'UNIT-Z10-LEG-0001', 'L-01-01', 'NORMAL', NULL, NULL),    -- 비활성 창고, 입고 2026-06-30 09:00
+(19, 19, 'UNIT-Z10-LEG-0002', 'L-01-02', 'NORMAL', NULL, NULL),    -- 비활성 창고, 입고 2026-06-30 09:00
+(20, 19, 'UNIT-Z10-LEG-0003', 'L-01-03', 'NORMAL', NULL, NULL),    -- 비활성 창고, 입고 2026-06-30 09:00
+(21, 19, 'UNIT-Z10-LEG-0004', 'L-01-04', 'NORMAL', NULL, NULL),    -- 비활성 창고, 입고 2026-06-30 09:00
+(22, 19, 'UNIT-Z10-LEG-0005', 'L-01-05', 'NORMAL', NULL, NULL),    -- 비활성 창고, 입고 2026-06-30 09:00
+(23, 20, 'UNIT-DMN-LEG-0001', 'L-03-01', 'NORMAL', NULL, NULL),    -- 비활성 창고, 입고 2026-06-30 09:00
+(24, 20, 'UNIT-DMN-LEG-0002', 'L-03-02', 'NORMAL', NULL, NULL);    -- 비활성 창고, 입고 2026-06-30 09:00
 
 
 -- =========================================================
@@ -199,21 +200,21 @@ INSERT INTO `item_unit` (`id`, `stock_id`, `serial_number`, `location`, `status`
 -- received_quantity 는 이미 stock.quantity 에 반영된 값입니다.
 -- =========================================================
 INSERT INTO `stock_schedule`
-(`id`, `supplier_id`, `warehouse_id`, `item_id`, `code`, `type`, `status`,
+(`id`, `supplier_id`, `warehouse_id`, `item_id`, `code`, `type`, `status`, `inspected_quantity`,
  `plan_quantity`, `received_quantity`, `available_at`, `inspect_status`, `is_confirmed`,
  `order_id`) VALUES
-( 1, 5, 1,  1, 'MO-20260721-Z10',  'PRODUCTION', 'PRODUCED',         2, 0, '2026-07-22 00:00:00', 'WAITING_INSPECTION', TRUE, NULL),
-( 2, 6, 1,  3, 'MO-20260722-V3',   'PRODUCTION', 'IN_PROGRESS',      2, 0, '2026-07-24 00:00:00', 'BEFORE_INSPECTION',  TRUE, NULL),
-( 3, 2, 1,  5, 'PO-20260719-DMN',  'PURCHASE',   'PARTIAL_RECEIVED', 3, 1, '2026-07-24 00:00:00', 'NOT_APPLICABLE',     TRUE, NULL),
-( 4, 3, 1,  8, 'PO-20260720-CVR',  'PURCHASE',   'CONFIRMED',        5, 0, '2026-07-22 00:00:00', 'NOT_APPLICABLE',     TRUE, NULL),
-( 5, 4, 2, 11, 'PO-20260721-PIL',  'PURCHASE',   'DRAFT',           10, 0, '2026-07-23 00:00:00', 'NOT_APPLICABLE',     FALSE, NULL),
-( 6, 1, 4,  1, 'PO-LEGACY-Z10',    'PURCHASE',   'CONFIRMED',       10, 0, '2026-07-21 00:00:00', 'NOT_APPLICABLE',     TRUE, NULL),
-( 7, 1, 1, 10, 'PO-20260720-LTX',  'PURCHASE',   'CONFIRMED',        4, 0, '2026-07-22 00:00:00', 'NOT_APPLICABLE',     TRUE, NULL),
-( 8, 5, 1,  2, 'MO-20260720-Z10K', 'PRODUCTION', 'PRODUCED',         2, 0, '2026-07-24 00:00:00', 'WAITING_INSPECTION', TRUE, NULL),
-( 9, 6, 1,  4, 'MO-20260721-E5',   'PRODUCTION', 'IN_PROGRESS',      2, 0, '2026-07-25 00:00:00', 'BEFORE_INSPECTION',  TRUE, NULL),
-(10, 3, 3,  9, 'PO-20260718-CVRK', 'PURCHASE',   'RECEIVED',         3, 3, '2026-07-19 00:00:00', 'NOT_APPLICABLE',     TRUE, NULL),
-(11, 6, 3,  3, 'MO-20260719-V3C',  'PRODUCTION', 'INSPECTED',        1, 0, '2026-07-22 00:00:00', 'INSPECTED',          TRUE, NULL),
-(12, 2, 1,  6, 'PO-20260721-FRMK', 'PURCHASE',   'DRAFT',            2, 0, '2026-07-25 00:00:00', 'NOT_APPLICABLE',     FALSE, NULL);
+( 1, 5, 1,  1, 'MO-20260721-Z10',  'PRODUCTION', 'PRODUCED',   0, 2, 0, '2026-07-22 00:00:00', 'WAITING_INSPECTION', TRUE, NULL),
+( 2, 6, 1,  3, 'MO-20260722-V3',   'PRODUCTION', 'IN_PROGRESS',   0, 2, 0, '2026-07-24 00:00:00', 'BEFORE_INSPECTION',  TRUE, NULL),
+( 3, 2, 1,  5, 'PO-20260719-DMN',  'PURCHASE',   'PARTIAL_RECEIVED',   0, 3, 1, '2026-07-24 00:00:00', 'NOT_APPLICABLE',     TRUE, NULL),
+( 4, 3, 1,  8, 'PO-20260720-CVR',  'PURCHASE',   'CONFIRMED',   0, 5, 0, '2026-07-22 00:00:00', 'NOT_APPLICABLE',     TRUE, NULL),
+( 5, 4, 2, 11, 'PO-20260721-PIL',  'PURCHASE',   'DRAFT',   0, 10, 0, '2026-07-23 00:00:00', 'NOT_APPLICABLE',     FALSE, NULL),
+( 6, 1, 4,  1, 'PO-LEGACY-Z10',    'PURCHASE',   'CONFIRMED',   0, 10, 0, '2026-07-21 00:00:00', 'NOT_APPLICABLE',     TRUE, NULL),
+( 7, 1, 1, 10, 'PO-20260720-LTX',  'PURCHASE',   'CONFIRMED',   0, 4, 0, '2026-07-22 00:00:00', 'NOT_APPLICABLE',     TRUE, NULL),
+( 8, 5, 1,  2, 'MO-20260720-Z10K', 'PRODUCTION', 'PRODUCED',   0, 2, 0, '2026-07-24 00:00:00', 'WAITING_INSPECTION', TRUE, NULL),
+( 9, 6, 1,  4, 'MO-20260721-E5',   'PRODUCTION', 'IN_PROGRESS',   0, 2, 0, '2026-07-25 00:00:00', 'BEFORE_INSPECTION',  TRUE, NULL),
+(10, 3, 3,  9, 'PO-20260718-CVRK', 'PURCHASE',   'RECEIVED',   0, 3, 3, '2026-07-19 00:00:00', 'NOT_APPLICABLE',     TRUE, NULL),
+(11, 6, 3,  3, 'MO-20260719-V3C',  'PRODUCTION', 'INSPECTED',   1, 1, 0, '2026-07-22 00:00:00', 'INSPECTED',          TRUE, NULL),
+(12, 2, 1,  6, 'PO-20260721-FRMK', 'PURCHASE',   'DRAFT',   0, 2, 0, '2026-07-25 00:00:00', 'NOT_APPLICABLE',     FALSE, NULL);
 
 
 -- =========================================================
@@ -263,54 +264,73 @@ INSERT INTO `orders` (`id`, `warehouse_id`, `order_number`, `order_status`, `del
 --
 -- status = CANCELED 인 라인은 준비 수량에서 제외됩니다. (요구사항 3-1)
 --
--- 반영하지 못한 엑셀 내용
---  · ORD202607200011 순번 1 은 품목코드가 UNKNOWN-SKU 로,
---    item 테이블에 대응 품목이 없어 상세를 넣지 못했습니다.
---    (주문 헤더만 존재하는 '확인 필요' 케이스로 남겨둡니다.)
+-- 미등록 품목 : item_id = NULL, raw_item_code = 주문서에 적혀 있던 코드
+--
+--  · ORD202607200011 순번 1 의 UNKNOWN-SKU 는 item 테이블에 대응 품목이 없습니다.
+--    코드를 버리지 않고 raw_item_code 에 남겨, 담당자에게 어느 코드를 등록해야
+--    하는지 알려 줍니다. (요구사항 3-6)
 -- =========================================================
-INSERT INTO `order_detail` (`id`, `order_id`, `item_id`, `item_set_id`, `sequence`,
-                            `order_quantity`, `status`) VALUES
-( 1,  1,    1, NULL, 1, 1, 'NORMAL'),  -- MAT-Z10-Q
-( 2,  2, NULL,    1, 1, 1, 'NORMAL'),  -- SET-Z10-DMN-Q
-( 3,  3,    3, NULL, 1, 1, 'NORMAL'),  -- MAT-V3-Q
-( 4,  3,    8, NULL, 2, 1, 'NORMAL'),  -- CVR-WP-Q
-( 5,  3,    8, NULL, 3, 2, 'CANCELED'),  -- CVR-WP-Q / 엑셀상 '취소' 라인
-( 6,  4,    1, NULL, 1, 1, 'NORMAL'),  -- MAT-Z10-Q / 취소된 주문
-( 7,  5,    5, NULL, 1, 2, 'NORMAL'),  -- FRM-DMN-Q
-( 8,  6,    8, NULL, 1, 2, 'NORMAL'),  -- CVR-WP-Q
-( 9,  7,    1, NULL, 1, 1, 'NORMAL'),  -- MAT-Z10-Q
-(10,  8,    3, NULL, 1, 2, 'NORMAL'),  -- MAT-V3-Q
-(11,  9,   11, NULL, 1, 4, 'NORMAL'),  -- PIL-ZERO
-(12, 10,    1, NULL, 1, 1, 'NORMAL'),  -- MAT-Z10-Q / 비활성 창고 출고
-(13, 12,   11, NULL, 1, 5, 'NORMAL'),  -- PIL-ZERO
-(14, 13,    8, NULL, 1, 1, 'NORMAL'),  -- CVR-WP-Q
-(15, 14,    1, NULL, 1, 1, 'NORMAL'),  -- MAT-Z10-Q
-(16, 15,    3, NULL, 1, 1, 'NORMAL'),  -- MAT-V3-Q
-(17, 15,    8, NULL, 2, 1, 'NORMAL'),  -- CVR-WP-Q
-(18, 16, NULL,    2, 1, 1, 'NORMAL'),  -- SET-Z10-DMN-K
-(19, 17,    3, NULL, 1, 1, 'NORMAL'),  -- MAT-V3-Q
-(20, 17,    7, NULL, 2, 1, 'NORMAL'),  -- FRM-LOW-Q
-(21, 18,   12, NULL, 1, 3, 'NORMAL'),  -- PIL-CERV
-(22, 19,   10, NULL, 1, 3, 'NORMAL'),  -- TOP-LTX-Q
-(23, 20,    4, NULL, 1, 2, 'NORMAL'),  -- MAT-E5-SS
-(24, 21,   11, NULL, 1, 5, 'NORMAL'),  -- PIL-ZERO
-(25, 22,    2, NULL, 1, 2, 'NORMAL'),  -- MAT-Z10-K
-(26, 23,    8, NULL, 1, 2, 'NORMAL'),  -- CVR-WP-Q
-(27, 23,   10, NULL, 2, 1, 'NORMAL'),  -- TOP-LTX-Q
-(28, 24,    7, NULL, 1, 2, 'NORMAL'),  -- FRM-LOW-Q
-(29, 25,    3, NULL, 1, 1, 'NORMAL'),  -- MAT-V3-Q
-(30, 26,    8, NULL, 1, 0, 'NORMAL'),  -- CVR-WP-Q / 수량 0
-(31, 27,   11, NULL, 1, 3, 'NORMAL'),  -- PIL-ZERO
-(32, 27,   12, NULL, 2, 2, 'NORMAL'),  -- PIL-CERV
-(33, 28,    9, NULL, 1, 2, 'NORMAL'),  -- CVR-WP-K
-(34, 28,    7, NULL, 2, 1, 'NORMAL'),  -- FRM-LOW-Q
-(35, 29, NULL,    1, 1, 1, 'NORMAL'),  -- SET-Z10-DMN-Q
-(36, 29,   14, NULL, 2, 1, 'NORMAL');  -- SVC-DISPOSAL / 서비스, 재고 수요 없음
+INSERT INTO `order_detail` (`id`, `order_id`, `item_id`, `item_set_id`, `raw_item_code`,
+                            `sequence`, `order_quantity`, `status`) VALUES
+( 1,  1,    1, NULL,          NULL, 1, 1, 'NORMAL'  ),  -- MAT-Z10-Q
+( 2,  2, NULL,    1,          NULL, 1, 1, 'NORMAL'  ),  -- SET-Z10-DMN-Q
+( 3,  3,    3, NULL,          NULL, 1, 1, 'NORMAL'  ),  -- MAT-V3-Q
+( 4,  3,    8, NULL,          NULL, 2, 1, 'NORMAL'  ),  -- CVR-WP-Q
+( 5,  3,    8, NULL,          NULL, 3, 2, 'CANCELED'),  -- CVR-WP-Q / 엑셀상 '취소' 라인
+( 6,  4,    1, NULL,          NULL, 1, 1, 'NORMAL'  ),  -- MAT-Z10-Q / 취소된 주문
+( 7,  5,    5, NULL,          NULL, 1, 2, 'NORMAL'  ),  -- FRM-DMN-Q
+( 8,  6,    8, NULL,          NULL, 1, 2, 'NORMAL'  ),  -- CVR-WP-Q
+( 9,  7,    1, NULL,          NULL, 1, 1, 'NORMAL'  ),  -- MAT-Z10-Q
+(10,  8,    3, NULL,          NULL, 1, 2, 'NORMAL'  ),  -- MAT-V3-Q
+(11,  9,   11, NULL,          NULL, 1, 4, 'NORMAL'  ),  -- PIL-ZERO
+(12, 10,    1, NULL,          NULL, 1, 1, 'NORMAL'  ),  -- MAT-Z10-Q / 비활성 창고 출고
+(13, 12,   11, NULL,          NULL, 1, 5, 'NORMAL'  ),  -- PIL-ZERO
+(14, 13,    8, NULL,          NULL, 1, 1, 'NORMAL'  ),  -- CVR-WP-Q
+(15, 14,    1, NULL,          NULL, 1, 1, 'NORMAL'  ),  -- MAT-Z10-Q
+(16, 15,    3, NULL,          NULL, 1, 1, 'NORMAL'  ),  -- MAT-V3-Q
+(17, 15,    8, NULL,          NULL, 2, 1, 'NORMAL'  ),  -- CVR-WP-Q
+(18, 16, NULL,    2,          NULL, 1, 1, 'NORMAL'  ),  -- SET-Z10-DMN-K
+(19, 17,    3, NULL,          NULL, 1, 1, 'NORMAL'  ),  -- MAT-V3-Q
+(20, 17,    7, NULL,          NULL, 2, 1, 'NORMAL'  ),  -- FRM-LOW-Q
+(21, 18,   12, NULL,          NULL, 1, 3, 'NORMAL'  ),  -- PIL-CERV
+(22, 19,   10, NULL,          NULL, 1, 3, 'NORMAL'  ),  -- TOP-LTX-Q
+(23, 20,    4, NULL,          NULL, 1, 2, 'NORMAL'  ),  -- MAT-E5-SS
+(24, 21,   11, NULL,          NULL, 1, 5, 'NORMAL'  ),  -- PIL-ZERO
+(25, 22,    2, NULL,          NULL, 1, 2, 'NORMAL'  ),  -- MAT-Z10-K
+(26, 23,    8, NULL,          NULL, 1, 2, 'NORMAL'  ),  -- CVR-WP-Q
+(27, 23,   10, NULL,          NULL, 2, 1, 'NORMAL'  ),  -- TOP-LTX-Q
+(28, 24,    7, NULL,          NULL, 1, 2, 'NORMAL'  ),  -- FRM-LOW-Q
+(29, 25,    3, NULL,          NULL, 1, 1, 'NORMAL'  ),  -- MAT-V3-Q
+(30, 26,    8, NULL,          NULL, 1, 0, 'NORMAL'  ),  -- CVR-WP-Q / 수량 0
+(31, 27,   11, NULL,          NULL, 1, 3, 'NORMAL'  ),  -- PIL-ZERO
+(32, 27,   12, NULL,          NULL, 2, 2, 'NORMAL'  ),  -- PIL-CERV
+(33, 28,    9, NULL,          NULL, 1, 2, 'NORMAL'  ),  -- CVR-WP-K
+(34, 28,    7, NULL,          NULL, 2, 1, 'NORMAL'  ),  -- FRM-LOW-Q
+(35, 29, NULL,    1,          NULL, 1, 1, 'NORMAL'  ),  -- SET-Z10-DMN-Q
+(36, 29,   14, NULL,          NULL, 2, 1, 'NORMAL'  ),  -- SVC-DISPOSAL / 서비스, 재고 수요 없음
+(37, 11, NULL, NULL, 'UNKNOWN-SKU', 1, 1, 'NORMAL'  );  -- 미등록 품목. 어느 코드를 등록해야 하는지 담당자에게 보여 준다
 
 
 -- =========================================================
--- 11~13. 주문 예약 / 재고 이력 / 처리 요청 기록
+-- 11. 주문 예약  (04_재고현황 의 '기존예약주문번호')
+--
+-- 기준시각에 이미 잡혀 있던 예약입니다. ORD-PRE-* 는 이 앱이 모르는 주문이라
+-- orders 행을 만들 수 없으므로 order_id 를 NULL 로 두고 보유자만 남깁니다.
+-- 합계는 stock.booked_quantity 와 일치하며, 가용재고 계산은 그 컬럼을 씁니다.
+-- 이 행들은 "누가 잡고 있는지" 를 화면에서 답하기 위한 내역입니다.
+-- =========================================================
+INSERT INTO `order_reservation` (`id`, `order_id`, `external_reference`, `item_id`,
+                                 `stock_id`, `quantity`, `status`, `created_at`) VALUES
+(1, NULL, 'ORD-PRE-001',  1,  1, 1, 'RESERVED', '2026-07-20 09:00:00'),  -- WH-HQ / MAT-Z10-Q
+(2, NULL, 'ORD-PRE-002',  8,  8, 1, 'RESERVED', '2026-07-20 09:00:00'),  -- WH-HQ / CVR-WP-Q
+(3, NULL, 'ORD-PRE-003', 11, 11, 2, 'RESERVED', '2026-07-20 09:00:00'),  -- WH-08 / PIL-ZERO
+(4, NULL, 'ORD-PRE-004',  4,  4, 1, 'RESERVED', '2026-07-20 09:00:00'),  -- WH-HQ / MAT-E5-SS
+(5, NULL, 'ORD-PRE-005', 10, 10, 2, 'RESERVED', '2026-07-20 09:00:00'),  -- WH-HQ / TOP-LTX-Q
+(6, NULL, 'ORD-PRE-006', 11, 18, 1, 'RESERVED', '2026-07-20 09:00:00');  -- WH-CJ / PIL-ZERO
+
+
+-- =========================================================
+-- 12~13. 재고 이력 / 처리 요청 기록
 --
 -- 앱이 예약·출고·발주·입고를 처리하면서 쌓는 테이블이라 초기 데이터는 없습니다.
--- 기준시각에 이미 잡혀 있던 예약은 stock.booked_quantity 로만 표현됩니다.
 -- =========================================================
