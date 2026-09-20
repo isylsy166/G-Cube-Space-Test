@@ -55,7 +55,9 @@ class ReadinessApiTest {
         for (String orderNumber : new String[]{"ORD202607190004", "ORD202607190013", "ORD202607180014"}) {
             mvc.perform(get("/api/orders/{no}", orderNumber))
                     .andExpect(jsonPath("$.order.preparationTarget").value(false))
-                    .andExpect(jsonPath("$.readiness.statusLabel").value("확인 필요"))
+                    // 사람이 손봐야 하는 '확인 필요' 와 구분한다. 이미 끝난 주문이다
+                    .andExpect(jsonPath("$.readiness.status").value("NOT_APPLICABLE"))
+                    .andExpect(jsonPath("$.readiness.statusLabel").value("준비 대상 아님"))
                     .andExpect(jsonPath("$.readiness.demands.length()").value(0));
         }
     }

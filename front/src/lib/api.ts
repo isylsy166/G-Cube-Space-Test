@@ -56,9 +56,18 @@ const query = (params: Record<string, string | boolean | undefined>) => {
   return s ? `?${s}` : "";
 };
 
-/** 명령 API 는 재시도로 두 번 반영되지 않게 멱등 키를 붙인다. */
-const idempotencyKey = () =>
-  globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+/**
+ * 멱등 키. 발주 생성과 입고 처리는 상태만으로 중복을 가릴 수 없어 서버가 키를 요구한다.
+ *
+ * <p>키를 호출할 때마다 새로 만들면 네트워크 재시도만 막고, 담당자가 버튼을 두 번 누르는
+ * 것은 막지 못한다. 그래서 **요청 내용 자체로** 키를 만든다. 같은 문서에 같은 수량을
+ * 넣는 요청은 몇 번을 보내도 같은 키가 되어 서버가 한 번만 반영한다.
+ *
+ * <p>같은 수량을 의도적으로 한 번 더 넣는 것(분할 입고)은 업무적으로 정상이므로,
+ * 입고 키에는 그 시점의 누적 입고수량을 함께 넣는다. 첫 입고가 반영되면 누적수량이
+ * 달라져 다음 요청은 새 키가 된다.
+ */
+const idempotencyKey = (...parts: (string | number)[]) => parts.join(":");
 
 export const api = {
   orders: {
@@ -106,7 +115,12 @@ export const api = {
         {
           method: "POST",
           body: JSON.stringify(body),
-          headers: { "Idempotency-Key": idempotencyKey() },
+          headers: {
+            // 같은 주문의 같은 품목을 같은 수량으로 다시 눌러도 문서가 하나만 생긴다
+            "Idempotency-Key": idempotencyKey(
+              "po", orderNumber, body.itemCode, body.quantity ?? "auto",
+            ),
+          },
         },
       ),
   },
@@ -138,11 +152,17 @@ export const api = {
         body: JSON.stringify({ passed }),
       }),
 
-    receive: (code: string, quantity: number) =>
+    /**
+     * @param receivedQuantity 호출 시점의 누적 입고수량. 멱등 키에 실어, 같은 버튼을
+     *   두 번 눌렀을 때는 한 번만 반영되고 첫 입고가 끝난 뒤의 추가 입고는 통과시킨다.
+     */
+    receive: (code: string, quantity: number, receivedQuantity: number) =>
       request<StockSchedule>(`/api/stock-schedules/${encodeURIComponent(code)}/receipt`, {
         method: "POST",
         body: JSON.stringify({ quantity }),
-        headers: { "Idempotency-Key": idempotencyKey() },
+        headers: {
+          "Idempotency-Key": idempotencyKey("rcv", code, receivedQuantity, quantity),
+        },
       }),
   },
 };

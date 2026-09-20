@@ -20,7 +20,7 @@ export const VIOLET: Tone = ["#6D28D9", "#F5F3FF", "#C4B5FD"];
 
 export const MUTED: Tone = ["#676D80", "#F2F3F6", "#E4E6EC"];
 
-/** 준비 상태별 색. 초록=준비 가능, 황토=입고 대기, 붉은색=재고 부족, 보라=정보 확인. */
+/** 준비 상태별 색. 초록=준비 가능, 황토=입고 대기, 붉은색=재고 부족, 보라=정보 확인, 회색=끝난 주문. */
 export const READINESS_TONE: Record<ReadinessStatus, Tone> = {
   READY: GREEN,
   WAIT_INSPECTION: AMBER,
@@ -28,6 +28,7 @@ export const READINESS_TONE: Record<ReadinessStatus, Tone> = {
   WAIT_PURCHASE: AMBER,
   SHORTAGE: ROSE,
   REVIEW_REQUIRED: VIOLET,
+  NOT_APPLICABLE: MUTED,
 };
 
 export const ORDER_STATUS_TONE: Record<OrderStatus, Tone> = {
@@ -70,6 +71,7 @@ export const READINESS_HINT: Record<ReadinessStatus, string> = {
   WAIT_PURCHASE: "구매한 품목의 입고를 기다리고 있습니다. 관련 입고 문서에서 도착 예정일을 확인하세요.",
   SHORTAGE: "예정된 입고 수량을 포함해도 재고가 부족합니다. 아래 부족 품목을 확인하고 발주하세요.",
   REVIEW_REQUIRED: "주문 정보에 확인이 필요한 항목이 있습니다. 아래 사유를 확인하세요.",
+  NOT_APPLICABLE: "취소되었거나 출고·배송이 끝난 주문입니다. 새로 준비할 것이 없습니다.",
 };
 
 /** 담당자가 지금 해야 할 일. 상태 배지 옆에 그대로 붙인다. */
@@ -80,4 +82,5 @@ export const READINESS_ACTION: Record<ReadinessStatus, string> = {
   WAIT_PURCHASE: "입고 일정 확인",
   SHORTAGE: "부족 품목 발주",
   REVIEW_REQUIRED: "주문 정보 확인",
+  NOT_APPLICABLE: "처리할 것 없음",
 };

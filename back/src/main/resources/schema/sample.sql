@@ -6,8 +6,9 @@ SET NAMES utf8mb4;
 -- =========================================================
 -- 재고 흐름 ERP 과제 — 샘플 데이터
 --
--- 출처 : .claude/재고흐름ERP과제_example-data_실무형_v2.xlsx
--- 대상 : src/main/resources/schema/schema.sql 의 10개 테이블
+-- 출처 : 재고흐름ERP과제_example-data_실무형_v2.xlsx (과제 제공 파일)
+-- 대상 : schema.sql 의 13개 테이블 중 기준 데이터가 있는 10개
+--        (order_reservation / stock_ledger / request_log 는 앱이 채운다)
 -- 기준시각 : 2026-07-21 09:00:00 (Asia/Seoul)
 --
 -- 엑셀의 한글 업무 상태값은 아래 코드로 치환했습니다.

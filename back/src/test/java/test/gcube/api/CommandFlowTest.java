@@ -1,5 +1,6 @@
 package test.gcube.api;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -442,6 +443,25 @@ class CommandFlowTest {
                         .content(json.writeValueAsString(
                                 new ScheduleCreateRequest("MAT-Z10-Q", 1, null))))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("확인이 필요한 주문은 수량을 직접 지정해도 발주할 수 없다")
+    void reviewRequiredOrderCannotBeOrdered() throws Exception {
+        // ORD202607200026 : 주문 수량이 0 이라 확인 필요. 수량을 명시하면 부족수량 조회를
+        // 건너뛰므로, 판정 상태를 보고 막지 않으면 이 요청이 통과한다. (요구사항 3-6)
+        mvc.perform(post("/api/orders/{no}/purchase-orders", "ORD202607200026")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(
+                                new ScheduleCreateRequest("CVR-WP-Q", 5, null))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        containsString("확인이 필요한 주문은 발주 대상이 아닙니다")));
+
+        // 문서가 하나도 생기지 않았다
+        mvc.perform(get("/api/stock-schedules").param("itemCode", "CVR-WP-Q"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
     }
 
     // ---------- 시나리오 8 : 입고 반복과 계획수량 초과 ----------

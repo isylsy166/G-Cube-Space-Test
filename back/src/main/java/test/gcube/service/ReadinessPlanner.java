@@ -84,14 +84,15 @@ public class ReadinessPlanner {
         if (readiness != null) {
             return readiness;
         }
-        // 준비 대상이 아닌 주문(취소·출고완료·배송완료)
+        // 준비 대상이 아닌 주문(취소·출고완료·배송완료). 사람이 손봐야 하는 '확인 필요' 와
+        // 구분한다. 이미 끝난 주문이 담당자의 처리 목록에 섞이면 안 된다.
         Orders order = ordersRepository.findByOrderNumberWithWarehouse(orderNumber).orElseThrow();
         return new OrderReadinessResponse(
                 order.getOrderNumber(),
                 order.getWarehouse().getCode(),
                 order.getDeliveryAt(),
-                ReadinessStatus.REVIEW_REQUIRED.name(),
-                ReadinessStatus.REVIEW_REQUIRED.getLabel(),
+                ReadinessStatus.NOT_APPLICABLE.name(),
+                ReadinessStatus.NOT_APPLICABLE.getLabel(),
                 List.of(),
                 List.of("주문 상태가 '%s' 라서 새 출고 준비 대상이 아닙니다."
                         .formatted(order.getOrderStatus().getLabel())));

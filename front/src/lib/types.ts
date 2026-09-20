@@ -11,7 +11,8 @@ export type ReadinessStatus =
   | "WAIT_PRODUCTION"
   | "WAIT_PURCHASE"
   | "SHORTAGE"
-  | "REVIEW_REQUIRED";
+  | "REVIEW_REQUIRED"
+  | "NOT_APPLICABLE";
 
 export type ScheduleType = "PURCHASE" | "PRODUCTION";
 

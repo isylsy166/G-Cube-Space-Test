@@ -211,7 +211,7 @@ export function ScheduleDetailPanel({ code }: { code: string | null }) {
             disabled={!canReceive || pending}
             onClick={() =>
               run(
-                () => api.schedules.receive(s.code, qty),
+                () => api.schedules.receive(s.code, qty, s.receivedQuantity),
                 `${s.code} ${qty} 입고 — 현재고가 늘고 대기 주문이 준비 상태가 갱신됩니다.`,
               )
             }

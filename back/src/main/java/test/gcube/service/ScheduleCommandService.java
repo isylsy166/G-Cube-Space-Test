@@ -22,6 +22,7 @@ import test.gcube.entity.enums.InspectStatus;
 import test.gcube.entity.enums.ItemType;
 import test.gcube.entity.enums.ItemUnitStatus;
 import test.gcube.entity.enums.LedgerType;
+import test.gcube.entity.enums.ReadinessStatus;
 import test.gcube.entity.enums.ScheduleStatus;
 import test.gcube.entity.enums.ScheduleType;
 import test.gcube.repository.ItemRepository;
@@ -80,6 +81,15 @@ public class ScheduleCommandService {
                     "사용 중지된 창고(%s)로는 발주할 수 없습니다.".formatted(warehouse.getCode()));
         }
 
+        // 확인이 필요한 주문은 사람이 먼저 손봐야 하므로 발주 대상이 아니다. (요구사항 3-6)
+        // 화면이 버튼을 감추는 것과 별개로 API 에서도 막는다. 수량을 직접 지정해 부르면
+        // 아래 부족수량 조회를 건너뛰기 때문에, 여기서 걸러내지 않으면 규칙이 뚫린다.
+        OrderReadinessResponse readiness = readinessPlanner.plan(orderNumber);
+        if (ReadinessStatus.REVIEW_REQUIRED.name().equals(readiness.status())) {
+            throw new IllegalStateException("확인이 필요한 주문은 발주 대상이 아닙니다. "
+                    + String.join(" ", readiness.reviewReasons()));
+        }
+
         Item item = itemRepository.findByCode(request.itemCode())
                 .orElseThrow(() -> new NoSuchElementException(
                         "등록되지 않은 품목입니다: " + request.itemCode()));
@@ -90,7 +100,7 @@ public class ScheduleCommandService {
 
         int quantity = request.quantity() != null
                 ? request.quantity()
-                : shortageOf(orderNumber, item.getCode());
+                : shortageOf(readiness, item.getCode());
         if (quantity <= 0) {
             throw new IllegalStateException(
                     "%s 은 부족 수량이 없어 발주할 필요가 없습니다.".formatted(item.getCode()));
@@ -211,8 +221,7 @@ public class ScheduleCommandService {
         return StockScheduleResponse.from(schedule);
     }
 
-    private int shortageOf(String orderNumber, String itemCode) {
-        OrderReadinessResponse readiness = readinessPlanner.plan(orderNumber);
+    private int shortageOf(OrderReadinessResponse readiness, String itemCode) {
         return readiness.demands().stream()
                 .filter(d -> d.itemCode().equals(itemCode))
                 .mapToInt(d -> d.shortageQuantity())

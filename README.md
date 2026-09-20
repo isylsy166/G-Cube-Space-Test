@@ -12,20 +12,40 @@
 
 ## 실행 및 데이터 적재 방법
 
-Java 17 과 Docker 가 필요합니다.
+Java 17, Node 20, Docker 가 필요합니다. 저장소 루트에서 터미널 3개를 띄웁니다.
 
 ```bash
-docker compose up -d     # MySQL 8.4 기동. 스키마와 과제 데이터가 이때 한 번 적재됩니다.
-./gradlew bootRun        # http://localhost:8080
+# 1) MySQL 8.4 — 스키마와 과제 데이터가 이때 한 번 적재됩니다
+docker compose up -d
+
+# 2) 백엔드 API — http://localhost:8080
+cd back && ./gradlew bootRun
+
+# 3) 화면 — http://localhost:3000
+cd front && npm install && npm run dev
 ```
 
-`docker-compose.yml` 이 아래 두 파일을 컨테이너의 `/docker-entrypoint-initdb.d` 로 마운트합니다.
+**화면 주소는 http://localhost:3000 입니다.**
+
+| 화면 | 주소 |
+| --- | --- |
+| 제품 | <http://localhost:3000/items> |
+| 주문 | <http://localhost:3000/orders> |
+| 발주 | <http://localhost:3000/schedules> |
+
+브라우저는 같은 오리진의 `/api` 로만 호출하고, `front/next.config.ts` 의 rewrite 가
+`http://localhost:8080` 으로 넘깁니다. CORS 설정을 서버에 두지 않기 위한 구조입니다.
+백엔드 주소를 바꾸려면 `front/.env` 에 `API_ORIGIN` 을 지정하세요 (`front/.env.example` 참고).
+
+`docker compose` 는 `./back/src/...` 를 상대경로로 마운트하므로 **반드시 저장소 루트에서**
+실행해야 합니다. `docker-compose.yml` 이 아래 두 파일을 컨테이너의
+`/docker-entrypoint-initdb.d` 로 마운트합니다.
 
 
 | 파일 | 내용 |
 | --- | --- |
-| `src/main/resources/schema/schema.sql` | 13개 테이블 DDL |
-| `src/main/resources/schema/sample.sql` | `재고흐름ERP과제_example-data_실무형_v2.xlsx` 를 옮긴 기준 데이터 |
+| `back/src/main/resources/schema/schema.sql` | 13개 테이블 DDL |
+| `back/src/main/resources/schema/sample.sql` | 과제 제공 엑셀을 옮긴 기준 데이터 (10개 테이블) |
 
 initdb 스크립트는 **데이터 디렉터리가 비어 있을 때만** 실행됩니다. 즉 앱이 처리한 예약·출고·입고
 결과는 컨테이너를 다시 띄워도 남습니다. 기동할 때마다 적재하면 `sample.sql` 의 `DELETE` 가 그동안의
@@ -44,16 +64,19 @@ docker compose down -v && docker compose up -d
 ### 테스트
 
 ```bash
-./gradlew test           # 68개. MySQL 컨테이너가 떠 있어야 한다
+cd back && ./gradlew test     # 67개. MySQL 컨테이너가 떠 있어야 한다
 ```
 
 | 클래스 | 건수 | 확인하는 것 |
 | --- | ---: | --- |
 | `ReadinessApiTest` | 11 | 세트 전개, 준비 판정, 우선순위 배분, 확인 필요 주문 |
 | `QueryApiTest` | 16 | 조회 API 가 업무 규칙대로 보여 주는지 |
-| `CommandFlowTest` | 31 | 예약→피킹→출고, 출고 제품 직접 선택과 배정 해제, 발주→검사→입고, 반복 요청 |
+| `CommandFlowTest` | 32 | 예약→피킹→출고, 출고 제품 직접 선택과 배정 해제, 발주→검사→입고, 반복 요청 |
 | `ConcurrencyTest` | 7 | 동시 요청에서 숫자가 어긋나지 않는지, 같은 개체를 동시에 골라도 한 주문에만 배정되는지 |
-| `PageRoutingTest` | 2 | 화면 라우팅과 정적 자원 |
+
+> **주의 — 테스트를 돌리면 개발용 DB 가 기준 데이터로 되돌아갑니다.** 화면에서 이것저것
+> 처리해 본 뒤 테스트를 돌리면 그 결과가 사라집니다. 순서를 바꾸거나, 화면을 만져 본 뒤에는
+> `docker compose down -v && docker compose up -d` 로 명시적으로 되돌리는 편이 덜 헷갈립니다.
 
 테스트는 개발용 MySQL 을 실행 중인 앱과 공유합니다. 화면에서 발주 하나만 만들어도 문서 수와
 재고가 어긋나 단언이 깨지므로, 조회·명령 테스트 세 클래스에 `@Sql("classpath:schema/sample.sql")`
@@ -67,9 +90,9 @@ docker compose down -v && docker compose up -d
 
 | 화면 | 주소 | 내용 |
 | --- | --- | --- |
-| 제품 | `/items` | 창고별 현재고·예약·가용, 시리얼 개체와 배정된 주문, 이 품목을 기다리는 주문, 걸려 있는 발주 문서, 수량 변경 이력 |
-| 주문 | `/orders` | 준비 판정과 부족 수량, 원 주문 라인과 세트 전개 결과, 예약→피킹→출고 액션, 출고할 시리얼 제품 직접 선택·해제, 부족 품목에서 발주 생성 |
-| 발주 | `/schedules` | 제공된 문서와 앱에서 만든 문서를 한 목록에서, 확정·품질검사·입고 처리, 어느 주문 때문에 생겼는지 |
+| 제품 | `localhost:3000/items` | 창고별 현재고·예약·가용, 시리얼 개체와 배정된 주문, 이 품목을 기다리는 주문, 걸려 있는 발주 문서, 수량 변경 이력 |
+| 주문 | `localhost:3000/orders` | 준비 판정과 부족 수량, 원 주문 라인과 세트 전개 결과, 예약→피킹→출고 액션, 출고할 시리얼 제품 직접 선택·해제, 부족 품목에서 발주 생성 |
+| 발주 | `localhost:3000/schedules` | 제공된 문서와 앱에서 만든 문서를 한 목록에서, 확정·품질검사·입고 처리, 어느 주문 때문에 생겼는지 |
 
 세 화면은 품목코드·주문번호·문서번호를 주소에 실어 서로 오갑니다. 주문의 부족 품목에서 발주를
 만들면 발주 페이지의 해당 문서로 이동하고, 그 문서를 입고 처리하면 제품 페이지의 현재고가 늘며
@@ -120,7 +143,13 @@ docker compose down -v && docker compose up -d
 
 미등록 품목, 사용 중지된 창고, 잘못된 수량처럼 자동 처리하면 안 되는 주문은 `확인 필요`로 두고
 **재고를 건드리지 않으며 풀도 소비하지 않습니다.** 담당자가 읽을 한글 사유를 함께 내려 주고,
-이런 주문은 발주 대상에서도 뺍니다.
+발주 대상에서도 뺍니다. 화면이 발주 버튼을 감추는 것과 별개로 **API 에서도 막습니다.**
+수량을 직접 지정해 호출하면 부족수량 조회를 건너뛰므로, 판정 상태를 보고 거절하지 않으면
+규칙이 뚫립니다.
+
+취소·출고 완료·배송 완료된 주문은 `확인 필요`가 아니라 **`준비 대상 아님`** 으로 구분합니다.
+`확인 필요`는 "사람이 손봐야 한다"는 뜻이고 이쪽은 "정상적으로 끝나서 볼 일이 없다"는 뜻이라,
+같은 값을 쓰면 담당자의 처리 목록에 이미 끝난 주문이 섞여 들어갑니다.
 
 ### 부족수량 계산과 발주·입고 처리
 
@@ -158,6 +187,18 @@ docker compose down -v && docker compose up -d
 넣는 것"이 업무적으로 정상일 수 있어 상태만으로 중복인지 판단할 수 없습니다. 그래서 호출자가
 `Idempotency-Key` 헤더로 키를 주면 `request_log` 에 저장해 두고, 같은 키가 다시 오면 처음
 처리한 결과를 그대로 돌려줍니다.
+
+키는 **요청 내용 자체로** 만듭니다. 호출할 때마다 난수를 새로 뽑으면 네트워크 재시도만 막고
+담당자가 버튼을 두 번 누르는 것은 못 막는데, 실제로 중복이 생기는 자리는 후자이기 때문입니다.
+
+| 명령 | 키 | 두 번 눌렀을 때 |
+| --- | --- | --- |
+| 발주 생성 | `po:{주문번호}:{품목코드}:{수량}` | 문서가 하나만 생긴다 |
+| 입고 처리 | `rcv:{문서번호}:{누적입고수량}:{수량}` | 현재고가 한 번만 는다 |
+
+입고 키에 **그 시점의 누적 입고수량**을 넣은 건, 같은 수량을 한 번 더 넣는 분할 입고가
+업무적으로 정상이기 때문입니다. 첫 입고가 반영되면 누적수량이 달라져 다음 요청은 새 키가 되고,
+반영되지 않았다면 같은 키라 서버가 막습니다. 즉 **"실수로 두 번"과 "의도해서 두 번"이 구분됩니다.**
 
 중복을 실제로 막는 것은 애플리케이션 코드가 아니라 **DB 제약**입니다. 코드로만 검사하면 두 요청이
 같은 순간에 검사를 통과할 수 있습니다.
@@ -212,19 +253,21 @@ docker compose down -v && docker compose up -d
    `order_detail` 에 nullable `raw_item_code` 를 두는 것이 맞습니다.
 2. **품질검사가 전량 통과 / 전량 불합격뿐입니다.** 계획수량 중 일부만 합격하는 경우를 다루지
    못합니다. 검사 결과에 수량을 싣고 통과 수량만 입고 가능하게 해야 합니다.
-3. **발주 생성 API 가 `확인 필요` 주문을 막지 않습니다.** 수량을 명시해 호출하면 부족수량 조회를
-   건너뛰어 통과합니다. 화면은 해당 버튼을 보여 주지 않지만 API 는 열려 있습니다.
-4. **부족 수량을 여러 주문에 걸쳐 묶어 발주하는 기능**과 **입고 예정일 지연 알림**은 선택 사항이라
+3. **부족 수량을 여러 주문에 걸쳐 묶어 발주하는 기능**과 **입고 예정일 지연 알림**은 선택 사항이라
    넣지 못했습니다.
-5. **발주 화면에서 공급처와 사용 가능 예정일을 고를 수 없습니다.** 기본값만 사용하며, 수량 입력이
-   브라우저 `prompt()` 입니다.
-6. **판정이 조회마다 전체 주문을 훑습니다.** 한 주문만 보더라도 전역 배분 결과 안에서의 값이어야
-   의미가 있어 전체를 계산한 뒤 꺼냅니다. 주문 29건에서는 문제되지 않지만, 규모가 커지면 증분
-   계산이나 캐시가 필요합니다.
-7. **기준시각에 이미 잡혀 있던 예약의 주인을 알 수 없습니다.** 엑셀의 `ORD-PRE-001~006` 은 주문
+4. **발주 화면에서 공급처와 사용 가능 예정일을 고를 수 없습니다.** 품목의 기본 공급처와
+   `기준시각 + 리드타임` 기본값만 사용합니다. 화면은 그 기본값으로 계산한 사용 가능 예정일이
+   배송 기한을 넘기는지 먼저 보여 주지만, 담당자가 다른 공급처를 골라 다시 계산해 볼 수는 없습니다.
+5. **판정이 조회마다 전체 주문을 훑고, 주문 페이지가 그것을 N 배로 증폭시킵니다.** 한 주문만
+   보더라도 전역 배분 결과 안에서의 값이어야 의미가 있어 전체를 계산한 뒤 꺼냅니다. 게다가 주문
+   페이지는 부족 품목까지 보여 주려고 준비 대상 주문 수만큼 상세를 호출하므로, 화면 한 번에
+   전역 판정이 `1 + N` 회 돕니다(현재 데이터에서 27회, 목록 31ms · 상세 24ms). 주문 29건에서는
+   체감되지 않지만 규모가 커지면 먼저 터지는 지점입니다. 목록 응답에 부족 품목을 함께 실어
+   상세 호출을 없애는 것이 맞습니다.
+6. **기준시각에 이미 잡혀 있던 예약의 주인을 알 수 없습니다.** 엑셀의 `ORD-PRE-001~006` 은 주문
    정보가 없어 `stock.booked_quantity` 로만 반영했습니다. 가용재고 계산에는 정확히 반영되지만,
    어느 주문이 잡은 수량인지는 화면에서 추적할 수 없습니다.
-8. **테스트가 개발용 MySQL 을 공유합니다.** `@Sql` 로 매 테스트마다 기준 데이터를 다시 적재해
+7. **테스트가 개발용 MySQL 을 공유합니다.** `@Sql` 로 매 테스트마다 기준 데이터를 다시 적재해
    결과는 결정적이지만, 테스트를 돌리면 개발 DB 가 기준 데이터로 덮입니다. Testcontainers 로
    테스트 전용 인스턴스를 띄우는 것이 정석입니다.
 
@@ -239,12 +282,78 @@ docker compose down -v && docker compose up -d
 | 언어·빌드 | Java 17, Gradle |
 | 서버 | Spring Boot 4.1.1 (Web MVC, Data JPA), Hibernate |
 | 데이터베이스 | MySQL 8.4 (Docker Compose) |
-| 화면 | 정적 HTML + 바닐라 JavaScript (`fetch`) |
+| 화면 | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, SWR |
 | 테스트 | JUnit 5, MockMvc, AssertJ |
 
-화면에 빌드 도구나 프런트엔드 프레임워크를 두지 않았습니다. API 가 이미 JSON 을 내려 주고 화면이
-세 개뿐이라, 템플릿 엔진이나 번들러를 더하면 실행 절차만 길어집니다. 계산 로직은 서버에 두고
-화면은 받은 값을 그리기만 합니다.
+`back` 과 `front` 를 분리했습니다. 세 화면이 같은 데이터를 다른 관점에서 보여 주고 한쪽 처리가
+다른 쪽에 바로 반영돼야 하는데, 이건 결국 **여러 화면이 하나의 서버 상태를 공유하는 문제**입니다.
+SWR 에 캐시와 재검증을 맡기고 명령이 끝나면 열려 있는 키를 한 번에 무효화하면, 화면마다 갱신
+코드를 따로 쓰지 않아도 세 화면이 같은 숫자를 봅니다.
+
+**계산은 전부 서버에 있습니다.** 준비 판정, 세트 전개, 부족수량은 화면에서 다시 계산하지 않고
+서버가 내려 준 값을 그대로 그립니다. 화면이 따로 계산하는 순간 서버와 어긋날 수 있고, 그러면
+담당자가 보는 숫자와 실제로 반영되는 숫자가 갈라집니다.
+
+CORS 설정은 서버에 두지 않았습니다. 브라우저는 같은 오리진의 `/api` 로만 호출하고 Next.js
+rewrite 가 백엔드로 넘깁니다.
+
+### 데이터 모델
+
+```mermaid
+erDiagram
+    supplier          ||--o{ item             : "기본 공급처"
+    supplier          ||--o{ stock_schedule   : "구매처·생산처"
+    warehouse         ||--o{ stock            : "보관"
+    warehouse         ||--o{ stock_schedule   : "입고창고"
+    warehouse         ||--o{ orders           : "출고창고"
+    item              ||--o{ stock            : ""
+    item              ||--o{ item_set_component : "구성품"
+    item              ||--o{ order_detail     : "단품 주문"
+    item              ||--o{ order_reservation : ""
+    item              ||--o{ stock_schedule   : ""
+    item_set          ||--o{ item_set_component : "전개"
+    item_set          ||--o{ order_detail     : "세트 주문"
+    stock             ||--o{ item_unit        : "시리얼 개체"
+    stock             ||--o{ order_reservation : ""
+    stock             ||--o{ stock_ledger     : "수량 변경 이력"
+    orders            ||--o{ order_detail     : ""
+    orders            ||--o{ order_reservation : "예약"
+    orders            ||--o{ item_unit        : "개체 배정"
+    orders            ||--o{ stock_schedule   : "이 주문 때문에 생긴 발주"
+    orders            ||--o{ stock_ledger     : ""
+    stock_schedule    ||--o{ stock_ledger     : "입고"
+
+    stock {
+        int quantity "현재고"
+        int booked_quantity "예약수량"
+    }
+    stock_schedule {
+        int plan_quantity "계획수량"
+        int received_quantity "입고수량"
+        bool confirmed "확정여부"
+        string inspect_status "검사상태"
+    }
+    order_detail {
+        int order_quantity "주문수량"
+        string status "정상/취소"
+    }
+    request_log {
+        string idempotency_key UK "멱등 키"
+    }
+```
+
+설계에서 결정한 것 네 가지입니다.
+
+- **세트를 `item` 이 아니라 `item_set` 으로 분리했습니다.** 세트는 출고 대상이 아니라 전개
+  대상이라 재고·시리얼·발주를 가질 수 없습니다. 같은 테이블에 두면 "재고를 가질 수 없는 품목"
+  이라는 예외를 코드 곳곳에서 계속 확인해야 합니다. `order_detail` 은 `item_id` 와
+  `item_set_id` 중 하나만 채웁니다.
+- **`stock` 이 현재고와 예약수량을 함께 듭니다.** 가용재고는 컬럼이 아니라
+  `quantity - booked_quantity` 로 계산합니다. 저장하면 세 숫자가 서로 어긋날 수 있습니다.
+- **준비 상태(`바로 준비 가능` 등)는 테이블에 없습니다.** 저장하지 않고 조회할 때마다
+  계산합니다. 근거는 위 "세트 전개와 준비 가능 여부 계산" 을 참고해 주세요.
+- **`stock_ledger` 가 재고를 바꾼 모든 시점을 남깁니다.** 예약·출고·입고를 한 테이블에 모아,
+  세 화면이 같은 이력을 각자의 관점(품목별·주문별·문서별)으로 보여 줍니다.
 
 ### API 명세
 
@@ -268,10 +377,3 @@ docker compose down -v && docker compose up -d
 | `POST` | `/api/stock-schedules/{code}/inspection` | 품질검사 결과 기록 |
 | `POST` | `/api/stock-schedules/{code}/receipt` | 입고 처리 (`Idempotency-Key`) |
 
-### ERD
-
-![ERD](back/src/main/resources/static/image/erd.png)
-
-### 일정
-
-![img.png](img.png)
