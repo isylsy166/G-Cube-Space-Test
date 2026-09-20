@@ -2,7 +2,6 @@ package test.gcube.repository;
 
 import jakarta.persistence.LockModeType;
 import java.util.List;
-import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -25,8 +24,6 @@ public interface OrderReservationRepository extends JpaRepository<OrderReservati
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from OrderReservation r where r.order.id = :orderId")
     List<OrderReservation> findByOrderIdForUpdate(@Param("orderId") Long orderId);
-
-    Optional<OrderReservation> findByOrderIdAndItemId(Long orderId, Long itemId);
 
     /**
      * 이미 예약이 잡혀 있는 주문. 이 주문들의 수량은 stock.booked_quantity 에 들어가 있다.

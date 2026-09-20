@@ -1,6 +1,7 @@
 package test.gcube.service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +13,7 @@ import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import test.gcube.dto.DemandAllocationResponse;
 import test.gcube.dto.OrderDetailResponse;
 import test.gcube.dto.OrderReadinessResponse;
 import test.gcube.entity.Item;
@@ -77,7 +79,16 @@ public class OrderCommandService {
         }
 
         Long warehouseId = order.getWarehouse().getId();
-        for (var demand : readiness.demands()) {
+
+        // 품목코드 순으로 잠근다. 주문 라인 순서대로 잠그면 A 주문이 X→Y, B 주문이 Y→X 를
+        // 동시에 잡을 때 서로를 기다리다 데드락이 난다. 모든 요청이 같은 순서로 잠그면
+        // 뒤에 온 요청은 첫 행에서 막혀 기다릴 뿐 엇갈리지 않는다.
+        // 피킹도 같은 이유로 시리얼번호 순으로 잠근다.
+        List<DemandAllocationResponse> demands = readiness.demands().stream()
+                .sorted(Comparator.comparing(DemandAllocationResponse::itemCode))
+                .toList();
+
+        for (DemandAllocationResponse demand : demands) {
             Item item = itemRepository.findByCode(demand.itemCode()).orElseThrow();
             Stock stock = stockRepository.findByWarehouseIdAndItemId(warehouseId, item.getId())
                     .orElseThrow(() -> new IllegalStateException(

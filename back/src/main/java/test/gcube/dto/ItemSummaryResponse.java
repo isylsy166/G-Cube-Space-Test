@@ -31,7 +31,7 @@ public record ItemSummaryResponse(
         int booked = 0;
         int inactive = 0;
         for (Stock stock : stocks) {
-            if (stock.getWarehouse().isStatus()) {
+            if (stock.getWarehouse().isActive()) {
                 quantity += stock.getQuantity();
                 booked += stock.getBookedQuantity();
             } else {

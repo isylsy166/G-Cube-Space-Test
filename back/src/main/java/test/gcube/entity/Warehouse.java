@@ -13,7 +13,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 창고. status 가 false 면 운영 중지된 창고다.
+ * 창고. active 가 false 면 사용 중지된 창고다.
+ * 이 창고의 재고와 입고예정은 준비 판단에 쓰지 않는다. (요구사항 3-2)
  */
 @Entity
 @Table(
@@ -36,14 +37,14 @@ public class Warehouse {
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 
-    /** 운영상태. true = 사용 중, false = 사용 중지 */
+    /** 운영상태. true = 사용 중, false = 사용 중지. 컬럼명은 원본 데이터에 맞춰 status 다. */
     @Column(name = "status", nullable = false)
-    private boolean status;
+    private boolean active;
 
     @Builder
-    public Warehouse(String code, String name, boolean status) {
+    public Warehouse(String code, String name, boolean active) {
         this.code = code;
         this.name = name;
-        this.status = status;
+        this.active = active;
     }
 }

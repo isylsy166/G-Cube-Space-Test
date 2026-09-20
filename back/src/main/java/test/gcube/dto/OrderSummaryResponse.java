@@ -46,7 +46,7 @@ public record OrderSummaryResponse(
                 order.getOrderNumber(),
                 order.getWarehouse().getCode(),
                 order.getWarehouse().getName(),
-                order.getWarehouse().isStatus(),
+                order.getWarehouse().isActive(),
                 order.getOrderStatus().name(),
                 order.getOrderStatus().getLabel(),
                 order.getDeliveryAt(),

@@ -195,7 +195,7 @@ public class StockSchedule {
      */
     public boolean isUsableForPlanning() {
         return confirmed
-                && warehouse.isStatus()
+                && warehouse.isActive()
                 && getUsableQuantity() > 0
                 && availableAt != null
                 && inspectStatus != InspectStatus.REJECTED;

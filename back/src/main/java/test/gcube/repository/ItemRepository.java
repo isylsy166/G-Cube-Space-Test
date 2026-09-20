@@ -12,13 +12,6 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     Optional<Item> findByCode(String code);
 
-    /** 주문의 품목코드 묶음을 한 번에 조회할 때 사용한다. */
-    List<Item> findByCodeIn(Collection<String> codes);
-
-    boolean existsByCode(String code);
-
-    List<Item> findBySupplierId(Long supplierId);
-
     /** 목록 화면용. 공급처까지 한 번에 읽는다. */
     @Query("select i from Item i join fetch i.supplier order by i.code")
     List<Item> findAllWithSupplier();

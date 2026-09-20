@@ -19,7 +19,7 @@ public record WarehouseStockResponse(
         return new WarehouseStockResponse(
                 stock.getWarehouse().getCode(),
                 stock.getWarehouse().getName(),
-                stock.getWarehouse().isStatus(),
+                stock.getWarehouse().isActive(),
                 stock.getQuantity(),
                 stock.getBookedQuantity(),
                 stock.getAvailableQuantity()

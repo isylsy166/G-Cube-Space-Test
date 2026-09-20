@@ -201,7 +201,7 @@ public class ReadinessPlanner {
     private List<String> reviewReasons(Orders order, List<OrderDetail> details) {
         List<String> reasons = new ArrayList<>();
 
-        if (!order.getWarehouse().isStatus()) {
+        if (!order.getWarehouse().isActive()) {
             reasons.add("출고창고 %s 가 사용 중지 상태입니다. 창고 확인이 필요합니다."
                     .formatted(order.getWarehouse().getCode()));
         }
@@ -271,7 +271,7 @@ public class ReadinessPlanner {
         static StockPool of(List<Stock> stocks) {
             StockPool pool = new StockPool();
             for (Stock stock : stocks) {
-                if (!stock.getWarehouse().isStatus()) {
+                if (!stock.getWarehouse().isActive()) {
                     continue;
                 }
                 pool.available.put(

@@ -41,7 +41,7 @@ public record StockScheduleResponse(
         boolean usableForPlanning
 ) {
     public static StockScheduleResponse from(StockSchedule schedule) {
-        boolean warehouseActive = schedule.getWarehouse().isStatus();
+        boolean warehouseActive = schedule.getWarehouse().isActive();
         return new StockScheduleResponse(
                 schedule.getCode(),
                 schedule.getType().name(),

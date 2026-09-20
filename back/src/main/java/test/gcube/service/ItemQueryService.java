@@ -2,6 +2,7 @@ package test.gcube.service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import test.gcube.dto.ItemDetailResponse;
 import test.gcube.dto.ItemSummaryResponse;
+import test.gcube.dto.ItemUnitGroupResponse;
 import test.gcube.dto.ItemUnitResponse;
 import test.gcube.dto.OrderReadinessResponse;
 import test.gcube.dto.StockHolderResponse;
@@ -19,6 +21,7 @@ import test.gcube.dto.StockScheduleResponse;
 import test.gcube.dto.WaitingOrderResponse;
 import test.gcube.dto.WarehouseStockResponse;
 import test.gcube.entity.Item;
+import test.gcube.entity.ItemUnit;
 import test.gcube.entity.Stock;
 import test.gcube.repository.ItemRepository;
 import test.gcube.repository.ItemUnitRepository;
@@ -48,6 +51,23 @@ public class ItemQueryService {
         return itemRepository.findAllWithSupplier().stream()
                 .map(item -> ItemSummaryResponse.of(
                         item, stocksByItem.getOrDefault(item.getId(), List.of())))
+                .toList();
+    }
+
+    /**
+     * 시리얼 개체 전부를 품목별로 묶어서. 개체 현황 화면이 이 한 건만 부른다.
+     * 품목 상세를 품목 수만큼 부르면 이 화면에 필요 없는 준비 판정이 그만큼 다시 돈다.
+     */
+    public List<ItemUnitGroupResponse> findAllUnits() {
+        Map<Item, List<ItemUnit>> unitsByItem = itemUnitRepository.findAllWithRefs().stream()
+                .collect(Collectors.groupingBy(unit -> unit.getStock().getItem(),
+                        LinkedHashMap::new, Collectors.toList()));
+
+        return unitsByItem.entrySet().stream()
+                .map(entry -> new ItemUnitGroupResponse(
+                        entry.getKey().getCode(),
+                        entry.getKey().getName(),
+                        entry.getValue().stream().map(ItemUnitResponse::from).toList()))
                 .toList();
     }
 

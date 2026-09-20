@@ -1,6 +1,5 @@
 package test.gcube.repository;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import jakarta.persistence.LockModeType;
@@ -13,12 +12,6 @@ import test.gcube.entity.Stock;
 public interface StockRepository extends JpaRepository<Stock, Long> {
 
     Optional<Stock> findByWarehouseIdAndItemId(Long warehouseId, Long itemId);
-
-    List<Stock> findByWarehouseId(Long warehouseId);
-
-    List<Stock> findByItemId(Long itemId);
-
-    List<Stock> findByWarehouseIdAndItemIdIn(Long warehouseId, Collection<Long> itemIds);
 
     /** 품목 상세용. 창고까지 한 번에 읽는다. */
     @Query("select s from Stock s join fetch s.warehouse where s.item.id = :itemId order by s.warehouse.code")

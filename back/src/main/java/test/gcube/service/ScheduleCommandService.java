@@ -82,7 +82,7 @@ public class ScheduleCommandService {
                 .orElseThrow(() -> new NoSuchElementException("없는 주문번호입니다: " + orderNumber));
 
         Warehouse warehouse = order.getWarehouse();
-        if (!warehouse.isStatus()) {
+        if (!warehouse.isActive()) {
             throw new IllegalStateException(
                     "사용 중지된 창고(%s)로는 발주할 수 없습니다.".formatted(warehouse.getCode()));
         }

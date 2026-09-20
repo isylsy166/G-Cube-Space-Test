@@ -9,17 +9,12 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import test.gcube.entity.ItemUnit;
-import test.gcube.entity.enums.ItemUnitStatus;
 
 public interface ItemUnitRepository extends JpaRepository<ItemUnit, Long> {
 
     Optional<ItemUnit> findBySerialNumber(String serialNumber);
 
     boolean existsBySerialNumber(String serialNumber);
-
-    List<ItemUnit> findByStockId(Long stockId);
-
-    List<ItemUnit> findByStockIdAndStatus(Long stockId, ItemUnitStatus status);
 
     /** 품목 상세용. 개체는 stock 을 거쳐 품목에 연결된다. */
     @Query("""
@@ -30,6 +25,19 @@ public interface ItemUnitRepository extends JpaRepository<ItemUnit, Long> {
             order by u.serialNumber
             """)
     List<ItemUnit> findByItemIdWithRefs(@Param("itemId") Long itemId);
+
+    /**
+     * 시리얼 개체 전부를 품목·시리얼번호 순으로. 개체 현황 화면이 한 번에 받아 간다.
+     * 품목마다 상세를 부르지 않기 위한 것이므로 준비 판정은 건드리지 않는다.
+     */
+    @Query("""
+            select u from ItemUnit u
+            join fetch u.stock s
+            join fetch s.item
+            join fetch s.warehouse
+            order by s.item.code, u.serialNumber
+            """)
+    List<ItemUnit> findAllWithRefs();
 
     /** 이 주문에 배정된 개체. */
     @Query("""

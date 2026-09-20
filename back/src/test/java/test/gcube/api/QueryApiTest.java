@@ -74,6 +74,20 @@ class QueryApiTest {
     }
 
     @Test
+    @DisplayName("개체 현황은 시리얼 품목만 묶어서 한 번에 준다")
+    void itemUnitsAreGroupedByItem() throws Exception {
+        mvc.perform(get("/api/items/units"))
+                .andExpect(status().isOk())
+                // 시리얼 관리 품목 5개(매트리스 4 + 프레임 3) 중 개체가 있는 품목만
+                .andExpect(jsonPath("$[?(@.itemCode=='MAT-Z10-Q')].units.length()").value(9))
+                .andExpect(jsonPath("$[?(@.itemCode=='PIL-ZERO')]", hasSize(0)))
+                .andExpect(jsonPath(
+                        "$[?(@.itemCode=='MAT-Z10-Q')].units[?(@.serialNumber=='UNIT-Z10-Q-0000')]"
+                                + ".assignedOrderNumber")
+                        .value("ORD202607180014"));
+    }
+
+    @Test
     @DisplayName("등록되지 않은 품목은 404 와 한글 사유를 준다")
     void unknownItemReturns404() throws Exception {
         mvc.perform(get("/api/items/{code}", "UNKNOWN-SKU"))
