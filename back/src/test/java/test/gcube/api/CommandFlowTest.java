@@ -1,5 +1,6 @@
 package test.gcube.api;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -13,9 +14,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.test.context.jdbc.Sql;
+import java.util.List;
 import test.gcube.dto.InspectionRequest;
+import test.gcube.dto.PickRequest;
 import test.gcube.dto.ReceiptRequest;
 import test.gcube.dto.ScheduleCreateRequest;
 
@@ -101,6 +105,120 @@ class CommandFlowTest {
         mvc.perform(post("/api/orders/{no}/picking", "ORD202607200001"));
         mvc.perform(post("/api/orders/{no}/picking", "ORD202607200001"))
                 .andExpect(jsonPath("$.pickedUnits.length()").value(1));
+    }
+
+    @Test
+    @DisplayName("직접 선택하면 고른 개체만 배정된다")
+    void pickingAssignsChosenUnits() throws Exception {
+        mvc.perform(post("/api/orders/{no}/reservation", "ORD202607200001"));
+
+        // 자동 배정이었다면 시리얼번호가 빠른 UNIT-Z10-Q-0001 이 잡혔을 자리다
+        mvc.perform(pick("ORD202607200001", "UNIT-Z10-Q-0002"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pickedUnits.length()").value(1))
+                .andExpect(jsonPath("$.pickedUnits[0].serialNumber").value("UNIT-Z10-Q-0002"));
+    }
+
+    @Test
+    @DisplayName("직접 선택에서 같은 개체를 다시 보내도 배정이 늘지 않는다")
+    void chosenPickingIsIdempotent() throws Exception {
+        mvc.perform(post("/api/orders/{no}/reservation", "ORD202607200001"));
+        mvc.perform(pick("ORD202607200001", "UNIT-Z10-Q-0002"));
+        mvc.perform(pick("ORD202607200001", "UNIT-Z10-Q-0002"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pickedUnits.length()").value(1));
+    }
+
+    @Test
+    @DisplayName("다른 주문에 배정된 개체는 직접 선택해도 배정되지 않는다")
+    void chosenPickingRejectsAssignedUnit() throws Exception {
+        mvc.perform(post("/api/orders/{no}/reservation", "ORD202607200001"));
+        mvc.perform(pick("ORD202607200001", "UNIT-Z10-Q-0003"))
+                .andExpect(status().isConflict());
+
+        mvc.perform(get("/api/orders/{no}", "ORD202607200001"))
+                .andExpect(jsonPath("$.pickedUnits.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("예약수량보다 많이 고르면 한 개도 배정되지 않는다")
+    void chosenPickingRejectsOverReservedQuantity() throws Exception {
+        mvc.perform(post("/api/orders/{no}/reservation", "ORD202607200001"));
+        // 예약은 1 개인데 2 개를 골랐다
+        mvc.perform(pick("ORD202607200001", "UNIT-Z10-Q-0001", "UNIT-Z10-Q-0002"))
+                .andExpect(status().isConflict());
+
+        mvc.perform(get("/api/orders/{no}", "ORD202607200001"))
+                .andExpect(jsonPath("$.pickedUnits.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("이 주문이 예약하지 않은 재고의 개체는 고를 수 없다")
+    void chosenPickingRejectsUnrelatedUnit() throws Exception {
+        mvc.perform(post("/api/orders/{no}/reservation", "ORD202607200001"));
+        // 주문에 없는 품목(MAT-V3-Q)의 개체
+        mvc.perform(pick("ORD202607200001", "UNIT-V3-Q-0001"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("없는 시리얼번호를 고르면 찾을 수 없다고 알려준다")
+    void chosenPickingRejectsUnknownSerial() throws Exception {
+        mvc.perform(post("/api/orders/{no}/reservation", "ORD202607200001"));
+        mvc.perform(pick("ORD202607200001", "UNIT-NOT-EXIST-0001"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("배정을 해제하면 개체가 보관 중으로 돌아가고 다시 고를 수 있다")
+    void unpickReturnsUnitToStock() throws Exception {
+        mvc.perform(post("/api/orders/{no}/reservation", "ORD202607200001"));
+        mvc.perform(pick("ORD202607200001", "UNIT-Z10-Q-0002"));
+
+        mvc.perform(delete("/api/orders/{no}/picking/{serial}", "ORD202607200001", "UNIT-Z10-Q-0002"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pickedUnits.length()").value(0));
+
+        mvc.perform(get("/api/items/{code}", "MAT-Z10-Q"))
+                .andExpect(jsonPath("$.units[?(@.serialNumber=='UNIT-Z10-Q-0002')].statusLabel")
+                        .value("창고 보관 중"));
+
+        // 해제한 뒤 다른 개체로 바꿔 배정할 수 있다
+        mvc.perform(pick("ORD202607200001", "UNIT-Z10-Q-0001"))
+                .andExpect(jsonPath("$.pickedUnits[0].serialNumber").value("UNIT-Z10-Q-0001"));
+    }
+
+    @Test
+    @DisplayName("출고된 개체는 배정을 해제할 수 없다")
+    void unpickRejectsShippedUnit() throws Exception {
+        mvc.perform(post("/api/orders/{no}/reservation", "ORD202607200001"));
+        mvc.perform(pick("ORD202607200001", "UNIT-Z10-Q-0002"));
+        mvc.perform(post("/api/orders/{no}/shipment", "ORD202607200001"));
+
+        mvc.perform(delete("/api/orders/{no}/picking/{serial}", "ORD202607200001", "UNIT-Z10-Q-0002"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("후보 개체는 예약수량과 아직 고를 수 있는 개체를 함께 준다")
+    void pickableUnitsShowCandidates() throws Exception {
+        mvc.perform(post("/api/orders/{no}/reservation", "ORD202607200001"));
+
+        mvc.perform(get("/api/orders/{no}/pickable-units", "ORD202607200001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].itemCode").value("MAT-Z10-Q"))
+                .andExpect(jsonPath("$[0].reservedQuantity").value(1))
+                .andExpect(jsonPath("$[0].remainingQuantity").value(1))
+                // 보관 중인 0001·0002 만 후보다. 다른 주문에 배정된 0003 과 출고된 0000 은 빠진다
+                .andExpect(jsonPath("$[0].candidates.length()").value(2))
+                .andExpect(jsonPath("$[0].candidates[0].serialNumber").value("UNIT-Z10-Q-0001"));
+
+        mvc.perform(pick("ORD202607200001", "UNIT-Z10-Q-0001"));
+        mvc.perform(get("/api/orders/{no}/pickable-units", "ORD202607200001"))
+                .andExpect(jsonPath("$[0].assignedQuantity").value(1))
+                .andExpect(jsonPath("$[0].remainingQuantity").value(0))
+                .andExpect(jsonPath("$[0].candidates.length()").value(1));
     }
 
     @Test
@@ -458,5 +576,12 @@ class CommandFlowTest {
         mvc.perform(get("/api/orders/{no}", "ORD202607200012"))
                 .andExpect(jsonPath("$.readiness.demands[0].availableQuantity").value(4))
                 .andExpect(jsonPath("$.readiness.demands[0].shortageQuantity").value(1));
+    }
+
+    /** 직접 선택 피킹 요청 하나. */
+    private MockHttpServletRequestBuilder pick(String orderNumber, String... serialNumbers) {
+        return post("/api/orders/{no}/picking", orderNumber)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(new PickRequest(List.of(serialNumbers))));
     }
 }

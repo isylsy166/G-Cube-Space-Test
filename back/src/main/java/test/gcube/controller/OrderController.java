@@ -2,6 +2,7 @@ package test.gcube.controller;
 
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import test.gcube.dto.OrderDetailResponse;
 import test.gcube.dto.OrderSummaryResponse;
+import test.gcube.dto.PickRequest;
+import test.gcube.dto.PickableUnitsResponse;
 import test.gcube.entity.enums.OrderStatus;
 import test.gcube.entity.enums.ReadinessStatus;
 import test.gcube.dto.ScheduleCreateRequest;
@@ -57,10 +60,30 @@ public class OrderController {
         return orderCommandService.reserve(orderNumber);
     }
 
-    /** 시리얼 피킹. 예약된 시리얼 관리 품목에 실제 개체를 연결한다. */
+    /**
+     * 시리얼 피킹. 예약된 시리얼 관리 품목에 실제 개체를 연결한다.
+     *
+     * <p>본문에 시리얼번호를 실어 보내면 그 개체만 배정한다(직접 선택).
+     * 본문이 없으면 보관 중인 개체를 시리얼번호 순으로 자동 배정한다.
+     */
     @PostMapping("/{orderNumber}/picking")
-    public OrderDetailResponse pick(@PathVariable String orderNumber) {
-        return orderCommandService.pick(orderNumber);
+    public OrderDetailResponse pick(@PathVariable String orderNumber,
+                                    @RequestBody(required = false) PickRequest request) {
+        return orderCommandService.pick(orderNumber,
+                request == null ? List.of() : request.serialNumbers());
+    }
+
+    /** 직접 선택용 후보 개체. 시리얼 품목마다 배정된 개체와 고를 수 있는 개체를 준다. */
+    @GetMapping("/{orderNumber}/pickable-units")
+    public List<PickableUnitsResponse> findPickableUnits(@PathVariable String orderNumber) {
+        return orderQueryService.findPickableUnits(orderNumber);
+    }
+
+    /** 배정 해제. 잘못 고른 개체를 보관 중으로 되돌린다. 출고된 개체는 되돌리지 않는다. */
+    @DeleteMapping("/{orderNumber}/picking/{serialNumber}")
+    public OrderDetailResponse unpick(@PathVariable String orderNumber,
+                                      @PathVariable String serialNumber) {
+        return orderCommandService.unpick(orderNumber, serialNumber);
     }
 
     /** 출고. 현재고와 예약수량을 함께 줄인다. 이미 출고된 주문은 아무것도 바뀌지 않는다. */

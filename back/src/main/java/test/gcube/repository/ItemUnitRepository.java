@@ -1,5 +1,6 @@
 package test.gcube.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import jakarta.persistence.LockModeType;
@@ -53,6 +54,39 @@ public interface ItemUnitRepository extends JpaRepository<ItemUnit, Long> {
             order by u.serialNumber
             """)
     List<ItemUnit> findPickable(@Param("stockId") Long stockId);
+
+    /**
+     * 직접 선택 화면에 보여 줄 후보. {@code findPickable} 과 조건은 같지만 잠그지 않고,
+     * 창고까지 함께 읽어 화면에 필요한 정보를 한 번에 채운다.
+     */
+    @Query("""
+            select u from ItemUnit u
+            join fetch u.stock s
+            join fetch s.warehouse
+            where s.id = :stockId
+              and u.status = test.gcube.entity.enums.ItemUnitStatus.NORMAL
+              and u.order is null
+            order by u.serialNumber
+            """)
+    List<ItemUnit> findSelectableWithRefs(@Param("stockId") Long stockId);
+
+    /**
+     * 담당자가 직접 고른 개체를 잠그고 읽는다. 같은 개체를 동시에 고른 요청 중
+     * 하나만 먼저 진행하고, 나머지는 잠금이 풀린 뒤 바뀐 상태를 보고 거절된다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select u from ItemUnit u
+            where u.serialNumber in :serialNumbers
+            order by u.serialNumber
+            """)
+    List<ItemUnit> findBySerialNumbersForUpdate(
+            @Param("serialNumbers") Collection<String> serialNumbers);
+
+    /** 배정 해제할 개체 한 건을 잠그고 읽는다. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from ItemUnit u where u.serialNumber = :serialNumber")
+    Optional<ItemUnit> findBySerialNumberForUpdate(@Param("serialNumber") String serialNumber);
 
     long countByStockId(Long stockId);
 

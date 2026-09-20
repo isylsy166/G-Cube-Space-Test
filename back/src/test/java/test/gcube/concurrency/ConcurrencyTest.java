@@ -155,6 +155,26 @@ class ConcurrencyTest {
         assertThat(assigned).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("서로 다른 주문이 같은 개체를 직접 골라도 한 주문에만 배정된다")
+    void concurrentChosenPickingAssignsUnitOnce() {
+        // ORD202607200001 과 ORD202607200002(세트 SET-Z10-DMN-Q) 는 둘 다
+        // WH-HQ 의 MAT-Z10-Q 를 1개씩 쓴다.
+        orderCommandService.reserve("ORD202607200001");
+        orderCommandService.reserve("ORD202607200002");
+
+        List<String> chosen = List.of("UNIT-Z10-Q-0001");
+        Result result = runConcurrently(List.of(
+                () -> orderCommandService.pick("ORD202607200001", chosen),
+                () -> orderCommandService.pick("ORD202607200002", chosen)));
+
+        // 늦게 도착한 쪽은 잠금이 풀린 뒤 바뀐 상태를 보고 거절된다.
+        assertThat(result.successes()).isEqualTo(1);
+        var unit = itemUnitRepository.findBySerialNumber("UNIT-Z10-Q-0001").orElseThrow();
+        assertThat(unit.getStatus()).isEqualTo(ItemUnitStatus.RESERVED);
+        assertThat(unit.getOrder()).isNotNull();
+    }
+
     // ---------- 도우미 ----------
 
     private record Result(int successes, int failures) {

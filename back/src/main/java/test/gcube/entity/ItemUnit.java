@@ -82,6 +82,12 @@ public class ItemUnit {
         this.status = ItemUnitStatus.RESERVED;
     }
 
+    /** 배정 해제. 잘못 고른 개체를 다시 보관 중으로 되돌린다. */
+    public void release() {
+        this.order = null;
+        this.status = ItemUnitStatus.NORMAL;
+    }
+
     /** 출고 처리. */
     public void ship() {
         this.status = ItemUnitStatus.SOLD;

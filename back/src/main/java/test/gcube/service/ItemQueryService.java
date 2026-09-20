@@ -25,7 +25,7 @@ import test.gcube.repository.StockRepository;
 import test.gcube.repository.StockLedgerRepository;
 import test.gcube.repository.StockScheduleRepository;
 
-/** 제품 페이지(요구사항 4-1) 조회. */
+/** 제품 페이지 조회. */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)

@@ -3,6 +3,7 @@ package test.gcube.service;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,10 +12,13 @@ import test.gcube.dto.OrderDetailResponse;
 import test.gcube.dto.OrderLineResponse;
 import test.gcube.dto.OrderReadinessResponse;
 import test.gcube.dto.OrderSummaryResponse;
+import test.gcube.dto.PickableUnitsResponse;
 import test.gcube.dto.ReservationResponse;
 import test.gcube.dto.StockLedgerResponse;
 import test.gcube.dto.StockScheduleResponse;
 import test.gcube.entity.ItemSetComponent;
+import test.gcube.entity.ItemUnit;
+import test.gcube.entity.OrderReservation;
 import test.gcube.entity.OrderDetail;
 import test.gcube.entity.Orders;
 import test.gcube.entity.enums.OrderStatus;
@@ -59,6 +63,42 @@ public class OrderQueryService {
                 .map(o -> OrderSummaryResponse.of(o, plans.get(o.getOrderNumber())))
                 .filter(o -> readiness == null || readiness.name().equals(o.readinessStatus()))
                 .toList();
+    }
+
+    /**
+     * 직접 선택 화면에 필요한 개체 목록. 시리얼 관리 품목의 예약마다
+     * 이미 배정된 개체와 아직 고를 수 있는 개체를 함께 준다.
+     *
+     * <p>조회 시점의 후보일 뿐이다. 다른 담당자가 먼저 집어간 개체는
+     * 피킹 때 잠그고 다시 확인해 사유와 함께 거절된다.
+     */
+    public List<PickableUnitsResponse> findPickableUnits(String orderNumber) {
+        Orders order = ordersRepository.findByOrderNumberWithWarehouse(orderNumber)
+                .orElseThrow(() -> new NoSuchElementException("없는 주문번호입니다: " + orderNumber));
+
+        Map<Long, List<ItemUnit>> assignedByStockId =
+                itemUnitRepository.findByOrderIdWithRefs(order.getId()).stream()
+                        .collect(Collectors.groupingBy(u -> u.getStock().getId()));
+
+        return orderReservationRepository.findByOrderIdWithRefs(order.getId()).stream()
+                .filter(r -> r.getItem().isSerial())
+                .map(r -> toPickableUnits(r, assignedByStockId.getOrDefault(
+                        r.getStock().getId(), List.of())))
+                .toList();
+    }
+
+    private PickableUnitsResponse toPickableUnits(OrderReservation reservation,
+                                                  List<ItemUnit> assigned) {
+        return new PickableUnitsResponse(
+                reservation.getItem().getCode(),
+                reservation.getItem().getName(),
+                reservation.getStock().getWarehouse().getCode(),
+                reservation.getQuantity(),
+                assigned.size(),
+                Math.max(0, reservation.getQuantity() - assigned.size()),
+                assigned.stream().map(ItemUnitResponse::from).toList(),
+                itemUnitRepository.findSelectableWithRefs(reservation.getStock().getId()).stream()
+                        .map(ItemUnitResponse::from).toList());
     }
 
     public OrderDetailResponse findByOrderNumber(String orderNumber) {
