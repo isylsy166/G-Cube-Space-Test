@@ -34,10 +34,29 @@ export const useOrderDetails = (orderNumbers: string[]) =>
     () => Promise.all(orderNumbers.map((no) => api.orders.detail(no))),
   );
 
+/**
+ * 출고할 개체를 직접 고를 때 쓰는 후보 목록. 배정 화면을 열었을 때만 읽는다.
+ * 조회 시점의 후보일 뿐이라, 먼저 집어간 개체는 배정 시점에 서버가 사유와 함께 막는다.
+ */
+export const usePickableUnits = (orderNumber: string | null) =>
+  useSWR(orderNumber ? ["pickable-units", orderNumber] : null, () =>
+    api.orders.pickableUnits(orderNumber!),
+  );
+
 export const useItems = () => useSWR(["items"], () => api.items.list());
 
 export const useItem = (code: string | null) =>
   useSWR(code ? ["item", code] : null, () => api.items.detail(code!));
+
+/**
+ * 여러 품목의 상세를 한 번에. 시리얼 개체가 어느 주문에 배정됐는지처럼
+ * 품목을 가로질러 봐야 하는 화면에서 쓴다. 목록 API 에는 개체가 없다.
+ */
+export const useItemDetails = (codes: string[]) =>
+  useSWR(
+    codes.length > 0 ? ["item-details", [...codes].sort().join(",")] : null,
+    () => Promise.all(codes.map((code) => api.items.detail(code))),
+  );
 
 export const useSchedules = (filter?: { type?: ScheduleType; confirmed?: boolean }) =>
   useSWR(["schedules", filter?.type ?? "", String(filter?.confirmed ?? "")], () =>

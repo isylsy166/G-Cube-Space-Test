@@ -19,7 +19,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Flowstock · 재고 운영 콘솔",
+  title: "Flowstock · 주문·재고 관리",
   description: "주문 준비 현황, 제품 재고, 발주·생산의뢰를 한 화면에서 처리합니다.",
 };
 

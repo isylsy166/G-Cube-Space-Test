@@ -47,6 +47,7 @@ export interface ItemSummary {
   spec: string | null;
   supplierCode: string;
   supplierName: string;
+  leadTimeDays?: number;
   quantity: number;
   bookedQuantity: number;
   availableQuantity: number;
@@ -204,6 +205,21 @@ export interface Reservation {
   status: ReservationStatus;
   statusLabel: string;
   createdAt: string;
+}
+
+/** 직접 선택 화면용. 시리얼 품목의 예약 한 건에 붙는 개체 목록. */
+export interface PickableUnits {
+  itemCode: string;
+  itemName: string;
+  warehouseCode: string;
+  /** 이 품목으로 예약된 수량. 배정은 이 수량을 넘을 수 없다. */
+  reservedQuantity: number;
+  assignedQuantity: number;
+  /** 더 골라야 하는 개체 수 */
+  remainingQuantity: number;
+  assignedUnits: ItemUnit[];
+  /** 같은 창고에 보관 중이고 아직 어느 주문에도 배정되지 않은 개체 */
+  candidates: ItemUnit[];
 }
 
 export interface OrderDetail {

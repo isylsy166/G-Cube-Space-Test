@@ -3,6 +3,7 @@ import type {
   ItemSummary,
   OrderDetail,
   OrderSummary,
+  PickableUnits,
   ReadinessStatus,
   ScheduleCreateRequest,
   ScheduleDetail,
@@ -29,7 +30,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers: { "Content-Type": "application/json", ...init?.headers },
     });
   } catch {
-    throw new ApiError("서버에 연결할 수 없습니다. 백엔드가 실행 중인지 확인해 주세요.", 0);
+    throw new ApiError("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.", 0);
   }
 
   if (!res.ok) {
@@ -75,10 +76,24 @@ export const api = {
         method: "POST",
       }),
 
-    pick: (orderNumber: string) =>
+    /** 시리얼번호를 넘기면 그 개체만 배정하고, 넘기지 않으면 서버가 자동으로 고른다. */
+    pick: (orderNumber: string, serialNumbers?: string[]) =>
       request<OrderDetail>(`/api/orders/${encodeURIComponent(orderNumber)}/picking`, {
         method: "POST",
+        body: serialNumbers?.length ? JSON.stringify({ serialNumbers }) : undefined,
       }),
+
+    /** 배정 해제. 잘못 고른 개체를 보관 중으로 되돌린다. */
+    unpick: (orderNumber: string, serialNumber: string) =>
+      request<OrderDetail>(
+        `/api/orders/${encodeURIComponent(orderNumber)}/picking/${encodeURIComponent(serialNumber)}`,
+        { method: "DELETE" },
+      ),
+
+    pickableUnits: (orderNumber: string) =>
+      request<PickableUnits[]>(
+        `/api/orders/${encodeURIComponent(orderNumber)}/pickable-units`,
+      ),
 
     ship: (orderNumber: string) =>
       request<OrderDetail>(`/api/orders/${encodeURIComponent(orderNumber)}/shipment`, {

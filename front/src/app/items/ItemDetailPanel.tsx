@@ -3,135 +3,151 @@
 import Link from "next/link";
 import { deltaColor, signed, toDate } from "@/lib/format";
 import { useItem } from "@/lib/hooks";
-import { READINESS_TONE, UNIT_STATUS_TONE } from "@/lib/tone";
-import { Badge, LedgerList, PanelMessage, SectionTitle, StatGrid } from "@/components/ui";
+import { ORANGE, READINESS_TONE, UNIT_STATUS_TONE } from "@/lib/tone";
+import {
+  AvailableFormula,
+  Badge,
+  Callout,
+  LedgerList,
+  PanelMessage,
+  SectionTitle,
+} from "@/components/ui";
+
+const STOCK_COLS = "minmax(0,1fr) 48px 48px 52px";
 
 export function ItemDetailPanel({ code }: { code: string | null }) {
   const { data, isLoading, error } = useItem(code);
 
   if (!code) return <PanelMessage>목록에서 품목을 선택하세요.</PanelMessage>;
-  if (error) return <PanelMessage>품목을 불러오지 못했습니다.</PanelMessage>;
+  if (error) return <PanelMessage tone="error">품목을 불러오지 못했습니다.</PanelMessage>;
   if (isLoading || !data) return <PanelMessage>불러오는 중…</PanelMessage>;
 
   const { item } = data;
   const stockless = item.type === "SERVICE";
-  // 창고별 합계는 사용 중인 창고 기준이다. 중지 창고 수량은 따로 떼어 보여 준다.
 
   return (
-    <div className="px-[22px] pt-5 pb-[34px]">
-      <p className="font-mono text-[11.5px] text-[--color-accent]">{item.code}</p>
-      <h2 className="mt-[3px] text-[17px] font-bold tracking-[-0.01em]">{item.name}</h2>
-      <p className="mt-1.5 text-xs leading-[1.7] text-[--color-ink-faint]">
-        {item.category} · {item.typeLabel} · 시리얼 {item.serial ? "관리" : "미관리"} · 기본
-        공급처 {item.supplierName}
+    <div className="px-5 pt-5 pb-9">
+      <p className="num text-xs font-bold text-accent">{item.code}</p>
+      <h2 className="mt-1 text-[19px] leading-tight font-bold tracking-[-0.01em]">{item.name}</h2>
+      <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">
+        {item.category} · {item.typeLabel} · 시리얼 {item.serial ? "관리" : "미관리"} · 기본 공급처{" "}
+        {item.supplierName}
         {item.spec && ` · ${item.spec}`}
       </p>
 
-      <StatGrid
-        stats={[
-          { label: "현재고", value: stockless ? "—" : item.quantity },
-          {
-            label: "예약",
-            value: stockless ? "—" : item.bookedQuantity,
-            color: "var(--color-ink-faint)",
-          },
-          {
-            label: "가용",
-            value: stockless ? "—" : item.availableQuantity,
-            color: stockless
-              ? "#C8C8D2"
-              : item.availableQuantity > 0
-                ? "var(--color-good)"
-                : "var(--color-bad)",
-          },
-        ]}
-      />
-
-      {item.inactiveWarehouseQuantity > 0 && (
-        <p className="mt-2.5 rounded-[10px] border border-[#f4ddd0] bg-[#fef8f4] px-3 py-2 text-[11.5px] leading-[1.6] text-[--color-bad]">
-          사용 중지된 창고에 {item.inactiveWarehouseQuantity}개가 남아 있습니다. 이 수량은 준비
-          판단에 쓰이지 않습니다.
-        </p>
+      {stockless ? (
+        <Callout tone={ORANGE}>
+          서비스 품목은 재고를 차지하지 않습니다. 주문에 들어 있어도 준비 수량을 만들지 않습니다.
+        </Callout>
+      ) : (
+        <AvailableFormula
+          className="mt-4"
+          quantity={item.quantity}
+          booked={item.bookedQuantity}
+          available={item.availableQuantity}
+        />
       )}
 
-      <section className="mt-[22px]">
-        <SectionTitle>창고별 재고</SectionTitle>
+      {item.inactiveWarehouseQuantity > 0 && (
+        <div className="mt-2.5">
+          <Callout tone={ORANGE}>
+            사용 중지된 창고에 <strong>{item.inactiveWarehouseQuantity}개</strong>가 남아 있습니다.
+            이 수량은 위 계산과 준비 판단에 쓰이지 않습니다.
+          </Callout>
+        </div>
+      )}
+
+      <section className="mt-6">
+        <SectionTitle aside="주문은 지정된 출고창고 재고만 씁니다">창고별 재고</SectionTitle>
         {data.stocks.length === 0 ? (
-          <p className="text-xs text-[--color-ink-ghost]">재고 기록이 없습니다.</p>
+          <p className="text-xs text-ink-dim">재고 기록이 없습니다.</p>
         ) : (
-          <>
-            <ul>
-              {data.stocks.map((s) => (
-                <li
-                  key={s.warehouseCode}
-                  className="grid grid-cols-[minmax(0,1fr)_42px_42px_42px] items-center gap-2 border-b border-[--color-line-soft] py-2"
-                >
+          <div className="overflow-hidden rounded-[10px] border border-line">
+            <div
+              className="grid gap-2 border-b border-line bg-raised px-3 py-2 text-[11px] font-bold text-ink-faint"
+              style={{ gridTemplateColumns: STOCK_COLS }}
+            >
+              <div>창고</div>
+              <div className="text-right">현재고</div>
+              <div className="text-right">− 예약</div>
+              <div className="text-right text-good">= 가용</div>
+            </div>
+            {data.stocks.map((s) => (
+              <div
+                key={s.warehouseCode}
+                className="grid items-center gap-2 border-b border-line-soft px-3 py-2 last:border-b-0"
+                style={{
+                  gridTemplateColumns: STOCK_COLS,
+                  background: s.active ? undefined : "var(--color-row-bad)",
+                }}
+              >
+                <span className="min-w-0">
                   <span
-                    className="truncate text-[12.5px]"
-                    style={{ color: s.active ? "var(--color-ink-soft)" : "var(--color-bad)" }}
+                    className="block truncate text-[13px]"
+                    style={{ color: s.active ? "var(--color-ink)" : "var(--color-bad)" }}
                   >
-                    {s.warehouseName} · {s.warehouseCode}
+                    {s.warehouseName}
+                  </span>
+                  <span className="num block truncate text-[11px] text-ink-dim">
+                    {s.warehouseCode}
                     {!s.active && " · 사용 중지"}
                   </span>
-                  <span className="text-right font-mono text-xs">{s.quantity}</span>
-                  <span className="text-right font-mono text-xs text-[--color-ink-dim]">
-                    {s.bookedQuantity}
-                  </span>
-                  <span
-                    className="text-right font-mono text-xs font-semibold"
-                    style={{
-                      color: !s.active
-                        ? "#C8C8D2"
-                        : s.availableQuantity > 0
-                          ? "var(--color-good)"
-                          : "var(--color-bad)",
-                    }}
-                  >
-                    {s.availableQuantity}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <div className="grid grid-cols-[minmax(0,1fr)_42px_42px_42px] gap-2 pt-[5px] text-[10px] text-[#c0c0cc]">
-              <span />
-              <span className="text-right">현재고</span>
-              <span className="text-right">예약</span>
-              <span className="text-right">가용</span>
-            </div>
-          </>
+                </span>
+                <span className="num text-right text-[13px]">{s.quantity}</span>
+                <span className="num text-right text-[13px] text-ink-dim">{s.bookedQuantity}</span>
+                <span
+                  className="num text-right text-[15px] font-bold"
+                  style={{
+                    color: !s.active
+                      ? "#C2C7D2"
+                      : s.availableQuantity > 0
+                        ? "var(--color-good)"
+                        : "var(--color-bad)",
+                  }}
+                >
+                  {s.availableQuantity}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </section>
 
       {item.serial && (
-        <section className="mt-[22px]">
-          <SectionTitle aside="상태 / 배정 주문">개체 재고 · 보관 위치</SectionTitle>
+        <section className="mt-6">
+          <SectionTitle aside="시리얼번호별 연결 주문">시리얼번호별 제품</SectionTitle>
           {data.units.length === 0 ? (
-            <p className="text-xs text-[--color-ink-ghost]">등록된 개체가 없습니다.</p>
+            <p className="text-xs text-ink-dim">등록된 시리얼 제품이 없습니다.</p>
           ) : (
-            <ul>
+            <ul className="overflow-hidden rounded-[10px] border border-line">
               {data.units.map((u) => (
                 <li
                   key={u.serialNumber}
-                  className="flex items-center gap-2.5 border-b border-[--color-line-soft] py-2 text-xs"
+                  className="flex items-center gap-2.5 border-b border-line-soft px-3 py-2 last:border-b-0"
+                  style={{ background: u.assignedOrderNumber ? "var(--color-accent-soft)" : undefined }}
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-mono">{u.serialNumber}</span>
-                    <span className="block truncate text-[10.5px] text-[--color-ink-ghost]">
+                    <span className="num block truncate text-[13px] font-semibold">
+                      {u.serialNumber}
+                    </span>
+                    <span className="num block truncate text-[11px] text-ink-dim">
                       {u.warehouseCode}
                       {u.location ? ` · ${u.location}` : " · 위치 미지정"}
                     </span>
                   </span>
-                  <Badge tone={UNIT_STATUS_TONE[u.status]}>{u.statusLabel}</Badge>
-                  <span className="w-[112px] text-right font-mono text-[11px]">
+                  <Badge tone={UNIT_STATUS_TONE[u.status]} dot={false}>
+                    {u.statusLabel}
+                  </Badge>
+                  <span className="num w-[116px] shrink-0 text-right text-xs">
                     {u.assignedOrderNumber ? (
                       <Link
                         href={`/orders?no=${u.assignedOrderNumber}`}
-                        className="text-[--color-accent] hover:underline"
+                        className="font-semibold text-accent hover:underline"
                       >
                         {u.assignedOrderNumber}
                       </Link>
                     ) : (
-                      <span className="text-[--color-ink-ghost]">미배정</span>
+                      <span className="text-ink-ghost">미배정</span>
                     )}
                   </span>
                 </li>
@@ -141,31 +157,31 @@ export function ItemDetailPanel({ code }: { code: string | null }) {
         </section>
       )}
 
-      <section className="mt-[22px]">
-        <SectionTitle>이 품목을 기다리는 주문</SectionTitle>
+      <section className="mt-6">
+        <SectionTitle aside="필요 / 부족">이 품목을 기다리는 주문</SectionTitle>
         {data.waitingOrders.length === 0 ? (
-          <p className="text-xs text-[--color-ink-ghost]">대기 중인 주문이 없습니다.</p>
+          <p className="text-xs text-ink-dim">대기 중인 주문이 없습니다.</p>
         ) : (
-          <ul>
+          <ul className="overflow-hidden rounded-[10px] border border-line">
             {data.waitingOrders.map((o) => (
-              <li key={o.orderNumber} className="border-b border-[--color-line-soft]">
+              <li key={o.orderNumber} className="border-b border-line-soft last:border-b-0">
                 <Link
                   href={`/orders?no=${o.orderNumber}`}
-                  className="flex items-center gap-2.5 py-[7px] hover:bg-[#fafafc]"
+                  className="flex items-center gap-2.5 px-3 py-2 transition-colors hover:bg-accent-soft"
                 >
-                  <span className="w-[106px] flex-none font-mono text-[11.5px] text-[--color-accent]">
+                  <span className="num w-[108px] flex-none text-xs font-semibold text-accent">
                     {o.orderNumber}
                   </span>
-                  <span className="w-[70px] flex-none font-mono text-[11px] text-[--color-ink-ghost]">
+                  <span className="num w-[72px] flex-none text-[11px] text-ink-dim">
                     {toDate(o.deliveryAt)}
                   </span>
                   <Badge tone={READINESS_TONE[o.readinessStatus]} dot={false}>
                     {o.readinessStatusLabel}
                   </Badge>
-                  <span className="ml-auto font-mono text-[11.5px]">
+                  <span className="num ml-auto text-xs font-semibold">
                     {o.requiredQuantity}
                     {o.shortageQuantity > 0 && (
-                      <span className="text-[--color-bad]"> (부족 {o.shortageQuantity})</span>
+                      <span className="font-bold text-bad"> · 부족 {o.shortageQuantity}</span>
                     )}
                   </span>
                 </Link>
@@ -175,26 +191,26 @@ export function ItemDetailPanel({ code }: { code: string | null }) {
         )}
       </section>
 
-      <section className="mt-[22px]">
-        <SectionTitle>발주 · 생산 문서</SectionTitle>
+      <section className="mt-6">
+        <SectionTitle aside="입고 / 계획">발주 · 생산 문서</SectionTitle>
         {data.schedules.length === 0 ? (
-          <p className="text-xs text-[--color-ink-ghost]">진행 중인 문서가 없습니다.</p>
+          <p className="text-xs text-ink-dim">진행 중인 문서가 없습니다.</p>
         ) : (
-          <ul>
+          <ul className="overflow-hidden rounded-[10px] border border-line">
             {data.schedules.map((d) => (
-              <li key={d.code} className="border-b border-[--color-line-soft]">
+              <li key={d.code} className="border-b border-line-soft last:border-b-0">
                 <Link
                   href={`/schedules?code=${d.code}`}
-                  className="flex items-center gap-2.5 py-[7px] hover:bg-[#fafafc]"
+                  className="flex items-center gap-2.5 px-3 py-2 transition-colors hover:bg-accent-soft"
                 >
-                  <span className="w-[106px] flex-none font-mono text-[11.5px] text-[--color-accent]">
+                  <span className="num w-[108px] flex-none text-xs font-semibold text-accent">
                     {d.code}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[11.5px] text-[--color-ink-faint]">
+                  <span className="min-w-0 flex-1 truncate text-xs text-ink-faint">
                     {d.typeLabel} · {d.warehouseName} · {d.statusLabel ?? "—"}
-                    {!d.confirmed && " · 미확정"}
+                    {!d.confirmed && <span className="font-semibold text-bad"> · 미확정</span>}
                   </span>
-                  <span className="font-mono text-[11.5px]">
+                  <span className="num text-xs font-semibold">
                     {d.receivedQuantity}/{d.planQuantity}
                   </span>
                 </Link>
@@ -204,7 +220,7 @@ export function ItemDetailPanel({ code }: { code: string | null }) {
         )}
       </section>
 
-      <section className="mt-[22px]">
+      <section className="mt-6">
         <SectionTitle>수량 변동 이력</SectionTitle>
         <LedgerList
           empty="변동 이력이 없습니다."
@@ -221,4 +237,3 @@ export function ItemDetailPanel({ code }: { code: string | null }) {
     </div>
   );
 }
-

@@ -26,14 +26,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-[26px] left-1/2 z-80 flex max-w-[660px] -translate-x-1/2 items-center gap-2.5 rounded-xl bg-[#16161f] px-[18px] py-3 text-[12.5px] leading-normal text-[#f5f5f8] shadow-[0_18px_40px_-16px_rgba(20,20,28,.55)]"
+          className="fixed bottom-7 left-1/2 z-80 flex max-w-[680px] -translate-x-1/2 items-start gap-2.5 rounded-xl bg-[#14161f] px-4 py-3 text-[13px] leading-relaxed text-[#f2f3f7] shadow-[0_20px_44px_-18px_rgba(17,19,28,.6)]"
         >
           <span
-            className="size-1.5 shrink-0 rounded-full"
-            style={{ background: toast.ok ? "#5BD1A6" : "#F0906B" }}
+            className="mt-[6px] size-2 shrink-0 rounded-full"
+            style={{ background: toast.ok ? "#4FD2A8" : "#F58A63" }}
             aria-hidden
           />
-          <span>{toast.message}</span>
+          <span className="text-pretty">{toast.message}</span>
         </div>
       )}
     </ToastContext.Provider>

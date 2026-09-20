@@ -3,58 +3,39 @@
 export type FilterOption = {
   value: string;
   label: string;
-  /** 칩에 함께 보여 줄 건수. 0 이어도 표시해 "없음"을 알 수 있게 한다. */
   count?: number;
-  /** 사용 중지된 창고처럼 주의가 필요한 선택지 */
   warn?: boolean;
 };
 
-/** 칩 한 줄. 라벨 + 선택지들. 여러 줄을 쌓으면 필터 바가 된다. */
-export function FilterRow({
-  label,
-  options,
-  value,
-  onChange,
-}: {
+const toggleClass = "inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors cursor-pointer";
+
+/** 하나의 값만 선택하는 조회 조건. 선택 상태는 색과 테두리로 함께 표시한다. */
+export function FilterRow({ label, options, value, onChange }: {
   label: string;
   options: FilterOption[];
   value: string;
   onChange: (next: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="w-14 flex-none text-[11px] text-[--color-ink-dim]">{label}</span>
-      <div
-        role="group"
-        aria-label={label}
-        className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5"
-      >
-        {options.map((o) => {
-          const on = value === o.value;
+    <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+      <span className="w-[64px] flex-none pt-2.5 text-xs font-semibold text-ink-muted">{label}</span>
+      <div role="group" aria-label={label} className="flex max-w-full flex-wrap gap-1 rounded-xl border border-line bg-canvas p-1">
+        {options.map((option) => {
+          const selected = value === option.value;
           return (
             <button
-              key={o.value || "all"}
+              key={option.value}
               type="button"
-              aria-pressed={on}
-              onClick={() => onChange(o.value)}
-              className="cursor-pointer rounded-full border px-3 py-1 text-xs whitespace-nowrap transition-colors"
-              style={{
-                borderColor: on
-                  ? "var(--color-accent)"
-                  : o.warn
-                    ? "#F0D8CC"
-                    : "#E4E4EC",
-                background: on ? "var(--color-accent)" : "#FFFFFF",
-                color: on ? "#FFFFFF" : o.warn ? "var(--color-bad)" : "var(--color-ink-muted)",
-              }}
+              aria-pressed={selected}
+              onClick={() => onChange(option.value)}
+              className={`${toggleClass} ${selected
+                ? "border-[#202530] bg-[#202530] font-bold text-white shadow-sm"
+                : "border-transparent text-ink-muted hover:bg-surface/70"}`}
             >
-              {o.label}
-              {o.count !== undefined && (
-                <span
-                  className="ml-1.5 font-mono text-[10.5px]"
-                  style={{ color: on ? "rgba(255,255,255,.75)" : "var(--color-ink-ghost)" }}
-                >
-                  {o.count}
+              <span className={option.warn && !selected ? "text-bad" : undefined}>{option.label}</span>
+              {option.count !== undefined && (
+                <span className={`num rounded-md px-1.5 py-0.5 text-[10px] ${selected ? "bg-white/15 text-white" : "bg-surface text-ink-faint"}`}>
+                  {option.count}
                 </span>
               )}
             </button>

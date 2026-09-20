@@ -4,25 +4,42 @@
   --font-sans: var(--font-noto-sans-kr), system-ui, sans-serif;
   --font-mono: var(--font-ibm-plex-mono), ui-monospace, monospace;
 
-  /* 프로토타입 팔레트 */
-  --color-canvas: #f6f6f9;
+  /* 바탕 */
+  --color-canvas: #f4f5f8;
   --color-surface: #ffffff;
-  --color-ink: #14141c;
-  --color-ink-soft: #3b3b4b;
-  --color-ink-muted: #5d5d6e;
-  --color-ink-faint: #8a8a99;
-  --color-ink-dim: #a0a0af;
-  --color-ink-ghost: #b4b4c2;
-  --color-line: #ececf2;
-  --color-line-soft: #f4f4f8;
-  --color-accent: #4c4f8a;
-  --color-good: #0e7c66;
-  --color-warn: #a4600b;
-  --color-bad: #c2410c;
+  --color-raised: #fbfbfd;
 
-  /* 준비가 막힌 줄을 목록에서 바로 알아보게 하는 배경 */
-  --color-bad-wash: #fdf6f2;
-  --color-review-wash: #f8f8fa;
+  /* 글자. 아래로 갈수록 옅다. ink-faint 까지는 흰 배경에서 WCAG AA 를 넘긴다. */
+  --color-ink: #11131c;
+  --color-ink-soft: #33384a;
+  --color-ink-muted: #4c5264;
+  --color-ink-faint: #676d80;
+  --color-ink-dim: #697286;
+  --color-ink-ghost: #727b8d;
+
+  /* 선 */
+  --color-line: #e2e5ec;
+  --color-line-soft: #eef0f4;
+
+  /* 강조 */
+  --color-accent: #3d40a8;
+  --color-accent-soft: #eceefb;
+  --color-accent-ink: #2f3186;
+
+  /* 상태: 초록=준비 가능, 황토=입고 대기, 붉은색=재고 부족, 보라=정보 확인 */
+  --color-good: #0b7160;
+  --color-good-wash: #e7f4f1;
+  --color-warn: #96590a;
+  --color-warn-wash: #fbf1de;
+  --color-bad: #be123c;
+  --color-bad-wash: #fff1f2;
+  --color-neutral: #565c6e;
+  --color-neutral-wash: #f0f1f5;
+
+  /* 목록에서 줄 자체를 물들일 때. 글자를 가리지 않을 만큼만 옅게. */
+  --color-row-bad: #fff5f6;
+  --color-row-review: #f5f3ff;
+  --color-row-warn: #fdfaf3;
 }
 
 html,
@@ -32,21 +49,41 @@ body {
 }
 
 body {
-  /* 표가 조밀한 화면이라 본문을 한 단계 키워 장시간 봐도 덜 피로하게 둔다. */
-  font-size: 13.5px;
-  line-height: 1.5;
+  /* 숫자를 오래 보는 화면이라 본문을 14px 로 두고 행간을 넉넉히 준다. */
+  font-size: 14px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 수량은 자리수가 흔들리지 않아야 위아래로 비교된다. */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* 키보드로 옮겨 다닐 때만 테두리를 드러낸다. */
+:where(a, button, input, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 ::-webkit-scrollbar {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d8d8e2;
+  background: #cdd2dc;
   border-radius: 8px;
   border: 3px solid transparent;
   background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b4bac7;
+  background-clip: content-box;
+  border: 3px solid transparent;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -55,5 +92,12 @@ body {
 /* 표는 가로로만 스크롤되고 페이지 본문은 절대 가로로 밀리지 않게 한다. */
 .table-scroll {
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
+}
+
+/* 표 안에서 머리글만 따라다니게 한다. 긴 목록에서 어느 칸인지 잃지 않는다. */
+.sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
