@@ -111,7 +111,7 @@ function ItemsWorkspace() {
           />
 
           {view === "serial" ? (
-            <SerialBoard items={rows} />
+            <SerialBoard />
           ) : (
             <>
 

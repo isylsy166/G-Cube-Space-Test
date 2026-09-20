@@ -2,39 +2,36 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { useItemDetails } from "@/lib/hooks";
+import { useItemUnits } from "@/lib/hooks";
 import { UNIT_STATUS_TONE } from "@/lib/tone";
 import { Badge, Card, CardHeader, EmptyRow, GroupHeader, SummaryBanner } from "@/components/ui";
-import type { ItemSummary, ItemUnitStatus } from "@/lib/types";
+import type { ItemUnitStatus } from "@/lib/types";
 
 const COLS = "minmax(140px,1fr) minmax(120px,0.8fr) 90px minmax(130px,0.9fr)";
 const MIN_WIDTH = 620;
 
 /**
  * "어느 시리얼 제품이 어느 주문에 배정되었는가"에 답하는 표.
- * 개체는 품목 상세에만 들어 있으므로 시리얼 관리 품목의 상세만 모아 한 목록으로 편다.
+ * 서버가 품목별로 묶어 준 개체 목록 한 건만 받는다.
  */
-export function SerialBoard({ items }: { items: ItemSummary[] }) {
-  const serialCodes = useMemo(
-    () => items.filter((i) => i.serial).map((i) => i.code),
-    [items],
-  );
-  const { data, isLoading, error } = useItemDetails(serialCodes);
+export function SerialBoard() {
+  const { data, isLoading, error } = useItemUnits();
 
-  const groups = useMemo(() => {
-    if (!data) return [];
-    return data
-      .map((d) => ({
-        item: d.item,
-        // 배정된 개체를 위로 올려 "어느 주문 것인지"가 먼저 보이게 한다.
-        units: [...d.units].sort(
-          (a, b) =>
-            Number(Boolean(b.assignedOrderNumber)) - Number(Boolean(a.assignedOrderNumber)) ||
-            a.serialNumber.localeCompare(b.serialNumber),
-        ),
-      }))
-      .filter((g) => g.units.length > 0);
-  }, [data]);
+  const groups = useMemo(
+    () =>
+      (data ?? [])
+        .filter((g) => g.units.length > 0)
+        .map((g) => ({
+          ...g,
+          // 배정된 개체를 위로 올려 "어느 주문 것인지"가 먼저 보이게 한다.
+          units: [...g.units].sort(
+            (a, b) =>
+              Number(Boolean(b.assignedOrderNumber)) - Number(Boolean(a.assignedOrderNumber)) ||
+              a.serialNumber.localeCompare(b.serialNumber),
+          ),
+        })),
+    [data],
+  );
 
   const counts = useMemo(() => {
     const all = groups.flatMap((g) => g.units);
@@ -79,10 +76,10 @@ export function SerialBoard({ items }: { items: ItemSummary[] }) {
           <div className="table-scroll">
             <div style={{ minWidth: MIN_WIDTH }}>
               {groups.map((g) => (
-                <section key={g.item.code}>
+                <section key={g.itemCode}>
                   <GroupHeader
-                    title={g.item.name}
-                    meta={<span className="num">{g.item.code}</span>}
+                    title={g.itemName}
+                    meta={<span className="num">{g.itemCode}</span>}
                   >
                     <span className="text-xs text-ink-faint">
                       제품 <strong className="num font-bold text-ink-soft">{g.units.length}</strong>

@@ -77,6 +77,13 @@ export interface ItemUnit {
   assignedOutside: boolean;
 }
 
+/** 시리얼 관리 품목 한 개와 그 개체 전부. 개체 현황 화면이 이 형태로 받는다. */
+export interface ItemUnitGroup {
+  itemCode: string;
+  itemName: string;
+  units: ItemUnit[];
+}
+
 /** 이 재고의 예약수량을 누가 잡고 있는지. 기준시각 이전 예약도 포함한다. */
 export interface StockHolder {
   orderNumber: string;

@@ -2,6 +2,7 @@ import type {
   BulkScheduleCreateRequest,
   ItemDetail,
   ItemSummary,
+  ItemUnitGroup,
   OrderDetail,
   OrderSummary,
   PickableUnits,
@@ -133,6 +134,8 @@ export const api = {
 
   items: {
     list: () => request<ItemSummary[]>("/api/items"),
+    /** 시리얼 개체 전부를 품목별로 묶어서 한 번에. 개체 현황 화면이 쓴다. */
+    units: () => request<ItemUnitGroup[]>("/api/items/units"),
     detail: (code: string) => request<ItemDetail>(`/api/items/${encodeURIComponent(code)}`),
   },
 

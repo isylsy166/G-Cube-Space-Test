@@ -24,17 +24,6 @@ export const useOrder = (orderNumber: string | null) =>
   useSWR(orderNumber ? ["order", orderNumber] : null, () => api.orders.detail(orderNumber!));
 
 /**
- * 여러 주문의 상세를 한 번에. 배송일별 준비 품목 합계나, 어떤 발주가 풀어 줄 주문을
- * 찾을 때처럼 여러 주문의 준비 내역을 함께 봐야 하는 화면에서 쓴다.
- * SWR 항목 하나로 묶어 두고 안에서 병렬로 받는다.
- */
-export const useOrderDetails = (orderNumbers: string[]) =>
-  useSWR(
-    orderNumbers.length > 0 ? ["order-details", [...orderNumbers].sort().join(",")] : null,
-    () => Promise.all(orderNumbers.map((no) => api.orders.detail(no))),
-  );
-
-/**
  * 출고할 개체를 직접 고를 때 쓰는 후보 목록. 배정 화면을 열었을 때만 읽는다.
  * 조회 시점의 후보일 뿐이라, 먼저 집어간 개체는 배정 시점에 서버가 사유와 함께 막는다.
  */
@@ -53,14 +42,11 @@ export const useItem = (code: string | null) =>
   useSWR(code ? ["item", code] : null, () => api.items.detail(code!));
 
 /**
- * 여러 품목의 상세를 한 번에. 시리얼 개체가 어느 주문에 배정됐는지처럼
- * 품목을 가로질러 봐야 하는 화면에서 쓴다. 목록 API 에는 개체가 없다.
+ * 시리얼 개체 전부. 품목을 가로질러 "어느 제품이 어느 주문에 배정됐는지" 를 볼 때 쓴다.
+ * 품목마다 상세를 부르면 요청이 품목 수만큼 늘고 준비 판정도 그만큼 다시 도므로,
+ * 서버가 품목별로 묶어 준 한 건만 받는다.
  */
-export const useItemDetails = (codes: string[]) =>
-  useSWR(
-    codes.length > 0 ? ["item-details", [...codes].sort().join(",")] : null,
-    () => Promise.all(codes.map((code) => api.items.detail(code))),
-  );
+export const useItemUnits = () => useSWR(["item-units"], () => api.items.units());
 
 export const useSchedules = (filter?: { type?: ScheduleType; confirmed?: boolean }) =>
   useSWR(["schedules", filter?.type ?? "", String(filter?.confirmed ?? "")], () =>
